@@ -28,6 +28,9 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+/* List of all processes in a sleep state waiting to wake up */
+static struct list wake_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -70,6 +73,8 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+/* Compare function for wake_list */
+static bool wake_less_func (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -92,12 +97,14 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&wake_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  initial_thread->wakeup_tick = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -463,6 +470,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->wakeup_tick = 0;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -577,6 +585,63 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
+}
+
+void
+thread_sleep (int64_t wake_tick) 
+{
+  struct thread *curr = thread_current ();
+  enum intr_level old_level;
+
+  // printf("--------------------\n");
+  // printf("thread status: %d\n", curr->status);
+  // printf("thread_sleep: %s\n", curr->name);
+  // printf("wake_tick: %lld\n", wake_tick);
+  if (curr == idle_thread)
+    return;
+
+  old_level = intr_disable ();
+  // list_insert_ordered (&wake_list, &curr->elem, wake_less_func, NULL);
+  list_push_back (&wake_list, &curr->elem);
+  curr->wakeup_tick = wake_tick;
+  thread_block ();
+  intr_set_level (old_level);
+}
+
+void
+thread_check_wake (void)
+{
+  enum intr_level old_level;
+  struct thread *wake_thread;
+  struct list_elem *wake_elem = list_begin(&wake_list);
+  while (wake_elem != list_end(&wake_list)) {
+    wake_thread = list_entry(wake_elem, struct thread, elem);
+    wake_thread->wakeup_tick--;
+    if (wake_thread->wakeup_tick <= 0) {
+      wake_elem = list_remove(wake_elem);
+      wake_thread->wakeup_tick = 0;
+      thread_unblock(wake_thread);
+    } else {
+      wake_elem = list_next(wake_elem);
+    }
+    // wake = list_entry(list_front(&wake_list), struct thread, elem);
+    // if (wake->wakeup_tick <= global_tick)
+    // {
+    //   list_pop_front(&wake_list);
+    //   wake->wakeup_tick = 0;
+    //   thread_unblock(wake);
+    // }
+    // else
+    //   return;
+  }
+}
+/* Compare function for wake_list */
+static bool
+wake_less_func (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+  const struct thread *a_thread = list_entry (a, struct thread, elem);
+  const struct thread *b_thread = list_entry (b, struct thread, elem);
+  return a_thread->wakeup_tick < b_thread->wakeup_tick;
 }
 
 /* Offset of `stack' member within `struct thread'.

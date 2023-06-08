@@ -93,6 +93,10 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+    /* New attribute for Project 1 Alarm Clock implementation */
+    int64_t wakeup_tick;                /* Wake up curr thread if 
+                                          global tick =  wakeup_tick */
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -137,5 +141,14 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+/* New functions for Project 1 Alarm Clock implementation */
+
+/* Sleep a thread for ticks ticks */
+void thread_sleep (int64_t wake_tick);
+
+/* Checks to see if the smallest number wakeup_ticks thread
+   need to wake up */
+void thread_check_wake (void);
 
 #endif /* threads/thread.h */
