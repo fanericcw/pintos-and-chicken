@@ -9,8 +9,8 @@
 >> Fill in the names and email addresses of your group members.
 
 FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Arwin Fong arwin.fong@mail.utoronto.ca
+Eric Fan <email@domain.example>
 
 ---- PRELIMINARIES ----
 
@@ -30,26 +30,61 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+struct thread {
+    /* No changes to exisiting members of the struct */
+
+    /* New attribute for Project 1 Alarm Clock implementation */
+    int64_t wakeup_tick;              
+}
+
+int64_t wakeup_tick - Once this variable hits 0, the with this tick will
+be removed from the wake_list and go to the ready_list.
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
+Timer_sleep calls another function in thread.c called thread_sleep.
+This function in thread.c inserts the current thread into a list
+struct called "wake_list". Before it inserts into the list, the 
+function blocks interrupts to handle multiple thread synchronization.
+After inserting, we change the "wake_tick" of that thread to be the
+amount of ticks it takes to wake it back up. Finally we block the thread
+and re-enable interrupts.
+
+In the timer interrupt handler, we call to the function thread_check_wake
+in thread.c. What thread_check_wake does is, it starts at the beginning 
+of the list, and loops through all elements. When it finds an element
+to wake up, similarly to thread_sleep, it will disable interrupts, remove
+the element from the wake_list and then set the wake_tick to 0 before
+re-enabling interrupts.
 
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
+To minimize the amount of time spent in timer interrupt, sort
+the wake_list by wakeup_tick. 
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
+Disabling interrupts helps synchronize multiple threads.
 
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
+To avoid race conditions when a timer interrupt occurs during a call to 
+timer sleep(), our algorithm temporarily disable interrupts.
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+This design was chosen since it is easy to keep track of all the threads
+in the wake_list since pintos has provided the list implemntation already.
+It is also easy to understand how the algorithm works, when we sleep the
+thread, we remove it from the ready_list and put it on the wake_list and
+when we are ready to wake it up we remove it from the sleep_list and
+put it back on the ready_list. 
 
              PRIORITY SCHEDULING
              ===================

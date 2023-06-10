@@ -73,8 +73,6 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-/* Compare function for wake_list */
-static bool wake_less_func (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -587,61 +585,60 @@ allocate_tid (void)
   return tid;
 }
 
+/* Sleep a thread for wake_ticks ticks */
 void
 thread_sleep (int64_t wake_tick) 
 {
   struct thread *curr = thread_current ();
   enum intr_level old_level;
 
-  // printf("--------------------\n");
-  // printf("thread status: %d\n", curr->status);
-  // printf("thread_sleep: %s\n", curr->name);
-  // printf("wake_tick: %lld\n", wake_tick);
   if (curr == idle_thread)
     return;
 
+  // Disable interrupts and add thread to wake_list
   old_level = intr_disable ();
-  // list_insert_ordered (&wake_list, &curr->elem, wake_less_func, NULL);
   list_push_back (&wake_list, &curr->elem);
   curr->wakeup_tick = wake_tick;
   thread_block ();
   intr_set_level (old_level);
 }
 
+/* Checks to see if wakeup_ticks is 0. If true, thread
+   needs to wake up */
 void
 thread_check_wake (void)
 {
+  if (list_empty(&wake_list))
+    return;
+
   enum intr_level old_level;
   struct thread *wake_thread;
   struct list_elem *wake_elem = list_begin(&wake_list);
+
+  // Traverse wake_list and decrement wakeup_tick
   while (wake_elem != list_end(&wake_list)) {
     wake_thread = list_entry(wake_elem, struct thread, elem);
     wake_thread->wakeup_tick--;
+    // Wake up thread if wakeup_tick is 0
     if (wake_thread->wakeup_tick <= 0) {
+      old_level = intr_disable ();
       wake_elem = list_remove(wake_elem);
       wake_thread->wakeup_tick = 0;
       thread_unblock(wake_thread);
+      intr_set_level (old_level);
     } else {
       wake_elem = list_next(wake_elem);
     }
-    // wake = list_entry(list_front(&wake_list), struct thread, elem);
-    // if (wake->wakeup_tick <= global_tick)
-    // {
-    //   list_pop_front(&wake_list);
-    //   wake->wakeup_tick = 0;
-    //   thread_unblock(wake);
-    // }
-    // else
-    //   return;
   }
 }
+
 /* Compare function for wake_list */
 static bool
 wake_less_func (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
-  const struct thread *a_thread = list_entry (a, struct thread, elem);
-  const struct thread *b_thread = list_entry (b, struct thread, elem);
-  return a_thread->wakeup_tick < b_thread->wakeup_tick;
+  struct thread *thread_a = list_entry(a, struct thread, elem);
+  struct thread *thread_b = list_entry(b, struct thread, elem);
+  return thread_a->wakeup_tick > thread_b->wakeup_tick;
 }
 
 /* Offset of `stack' member within `struct thread'.

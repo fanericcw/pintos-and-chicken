@@ -95,7 +95,7 @@ struct thread
 
     /* New attribute for Project 1 Alarm Clock implementation */
     int64_t wakeup_tick;                /* Wake up curr thread if 
-                                          global tick =  wakeup_tick */
+                                           wakeup_tick = 0 */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -144,11 +144,11 @@ int thread_get_load_avg (void);
 
 /* New functions for Project 1 Alarm Clock implementation */
 
-/* Sleep a thread for ticks ticks */
+/* Sleep a thread for wake_tick ticks */
 void thread_sleep (int64_t wake_tick);
 
-/* Checks to see if the smallest number wakeup_ticks thread
-   need to wake up */
+/* Checks to see if wakeup_ticks is 0. If true, thread
+   needs to wake up */
 void thread_check_wake (void);
 
 #endif /* threads/thread.h */
