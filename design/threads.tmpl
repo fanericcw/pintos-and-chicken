@@ -62,7 +62,10 @@ re-enabling interrupts.
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
 To minimize the amount of time spent in timer interrupt, sort
-the wake_list by wakeup_tick. 
+the wake_list by wakeup_tick. When checking which threads to wake up,
+We only need to loop until we find a thread's "wakeup_tick" is above
+the global_tick or when the wake_list is empty. This ensures that we
+are not checking the other threads unnecessarily. 
 
 ---- SYNCHRONIZATION ----
 
@@ -84,7 +87,11 @@ in the wake_list since pintos has provided the list implemntation already.
 It is also easy to understand how the algorithm works, when we sleep the
 thread, we remove it from the ready_list and put it on the wake_list and
 when we are ready to wake it up we remove it from the sleep_list and
-put it back on the ready_list. 
+put it back on the ready_list. Previous design ideas did not have any
+list sorting which meant we had to check every thread in the wake_list.
+The current design involves sorting the item as the element enters the list.
+This design is superior since it allows us to check threads that do not
+need to wake up at most once.
 
              PRIORITY SCHEDULING
              ===================

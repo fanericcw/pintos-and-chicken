@@ -11,6 +11,10 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+/* For timer_tick() */
+#include "devices/timer.h"
+/* Fixed point arithmetic */
+#include "fixed-point.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -62,7 +66,12 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
+static int load_avg;            /* System load average */
+
 static void kernel_thread (thread_func *, void *aux);
+
+/* Compare function for wake_list */
+static bool wake_less_func (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
@@ -103,6 +112,8 @@ thread_init (void)
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
   initial_thread->wakeup_tick = 0;
+
+  load_avg = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -354,31 +365,77 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
+  thread_current ()->nice = nice;
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current ()->nice;
+}
+
+/* Calculate thread's priority based on 4.4BSD Scheduler */
+void
+calculate_thread_priority (void)
+{
+
+}
+
+/* Calculate recent_cpu based on to 4.4BSD Scheduler  */
+void
+calculate_recent_cpu (void)
+{
+  struct thread *curr = thread_current ();
+  if (curr == idle_thread)
+    return;
+  int load_avg_2 = FP_MULT_INT(load_avg, 2);
+  curr->recent_cpu = FP_ADD_INT(FP_MULT(FP_DIV(load_avg_2, FP_ADD_INT(load_avg_2, 1)), curr->recent_cpu), curr->nice);
+}
+
+/* Calculate load_avg based on 4.4BSD Scheduler*/
+void
+calculate_load_avg (void)
+{
+  /* ready_threads not counting idle thread */
+  int ready_threads = list_size(&ready_list);
+  // int ready_threads = curr != idle_thread ? list_size(&ready_list) + 1 : list_size(&ready_list);
+  load_avg = FP_MULT(FP_DIV_INT(INT_TO_FP(59),60), load_avg) + FP_MULT_INT(FP_DIV_INT(INT_TO_FP(1),60), ready_threads);
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return FP_TO_INT_NEAREST(FP_MULT_INT(load_avg, 100));
+}
+
+/* Calculate recent_cpu for all threads in the all_list */
+void
+thread_calculate_all_cpu (void)
+{
+  struct list_elem *e = list_begin(&all_list);
+  while(e != list_end(&all_list))
+  {
+    calculate_recent_cpu();
+    e = list_next(e);
+  }
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return FP_TO_INT_NEAREST(FP_MULT_INT(thread_current ()->recent_cpu, 100));
+}
+
+/* Increment recent_cpu for current threads */
+void
+thread_incr_recent_cpu (void)
+{
+  struct thread *curr = thread_current ();
+  if (curr->status == THREAD_RUNNING)
+    curr->recent_cpu = FP_ADD_INT(curr->recent_cpu, 1);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -469,6 +526,15 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   t->wakeup_tick = 0;
+
+  if (thread_mlfqs) {
+    t->nice = 0;                  /* Default nice value */
+    if (t == initial_thread) {
+      t->recent_cpu = 0;
+    } else {
+      t->recent_cpu = thread_get_recent_cpu ();
+    }
+  }
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -597,8 +663,8 @@ thread_sleep (int64_t wake_tick)
 
   // Disable interrupts and add thread to wake_list
   old_level = intr_disable ();
-  list_push_back (&wake_list, &curr->elem);
-  curr->wakeup_tick = wake_tick;
+  curr->wakeup_tick = wake_tick + timer_ticks ();
+  list_insert_ordered (&wake_list, &curr->elem, wake_less_func, NULL);
   thread_block ();
   intr_set_level (old_level);
 }
@@ -612,23 +678,15 @@ thread_check_wake (void)
     return;
 
   enum intr_level old_level;
-  struct thread *wake_thread;
-  struct list_elem *wake_elem = list_begin(&wake_list);
+  struct thread *wake_thread = list_entry(list_begin(&wake_list), struct thread, elem);
 
-  // Traverse wake_list and decrement wakeup_tick
-  while (wake_elem != list_end(&wake_list)) {
-    wake_thread = list_entry(wake_elem, struct thread, elem);
-    wake_thread->wakeup_tick--;
-    // Wake up thread if wakeup_tick is 0
-    if (wake_thread->wakeup_tick <= 0) {
-      old_level = intr_disable ();
-      wake_elem = list_remove(wake_elem);
-      wake_thread->wakeup_tick = 0;
-      thread_unblock(wake_thread);
-      intr_set_level (old_level);
-    } else {
-      wake_elem = list_next(wake_elem);
-    }
+  while (!list_empty(&wake_list) && wake_thread->wakeup_tick <= timer_ticks())
+  {
+    old_level = intr_disable ();
+    list_pop_front(&wake_list);
+    thread_unblock(wake_thread);
+    intr_set_level (old_level);
+    wake_thread = list_entry(list_begin(&wake_list), struct thread, elem);
   }
 }
 
@@ -636,9 +694,9 @@ thread_check_wake (void)
 static bool
 wake_less_func (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
-  struct thread *thread_a = list_entry(a, struct thread, elem);
-  struct thread *thread_b = list_entry(b, struct thread, elem);
-  return thread_a->wakeup_tick > thread_b->wakeup_tick;
+  struct thread *a_thread = list_entry(a, struct thread, elem);
+  struct thread *b_thread = list_entry(b, struct thread, elem);
+  return a_thread->wakeup_tick < b_thread->wakeup_tick;
 }
 
 /* Offset of `stack' member within `struct thread'.

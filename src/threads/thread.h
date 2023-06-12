@@ -97,6 +97,10 @@ struct thread
     int64_t wakeup_tick;                /* Wake up curr thread if 
                                            wakeup_tick = 0 */
 
+    /* New attribute for Project 1 Advanced Scheduler implementation */
+    int nice;                           /* Nice value of thread */
+    int recent_cpu;                     /* Recent CPU value of thread */
+      
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -150,5 +154,14 @@ void thread_sleep (int64_t wake_tick);
 /* Checks to see if wakeup_ticks is 0. If true, thread
    needs to wake up */
 void thread_check_wake (void);
+
+/* New functions for Project 1 MLFQ implementation */
+
+void calculate_load_avg (void);
+void calculate_recent_cpu (void);
+void calculate_thread_priority (void);
+void thread_incr_recent_cpu (void);
+void thread_calculate_all_cpu (void);
+
 
 #endif /* threads/thread.h */
