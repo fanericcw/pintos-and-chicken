@@ -171,7 +171,6 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
-  thread_check_wake ();
   if (thread_mlfqs)
   {
     thread_incr_recent_cpu ();
@@ -185,6 +184,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
       thread_calculate_all_priority ();
     }
   }
+  thread_check_wake ();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
