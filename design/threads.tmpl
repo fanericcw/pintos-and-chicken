@@ -162,6 +162,17 @@ thread is popped off the list and unblocked
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+struct thread {
+    /* No changes to exisiting members of the struct */
+
+    /* New attribute for Project 1 Advanced Scheduler implementation */
+    int nice;                           /* Nice value of thread */
+    int recent_cpu;                     /* Recent CPU value of thread */
+}
+
+--- Global variable ---
+static int load_avg;            /* System load average */
+
 ---- ALGORITHMS ----
 
 >> C2: Suppose threads A, B, and C have nice values 0, 1, and 2.  Each
@@ -172,10 +183,10 @@ thread is popped off the list and unblocked
 timer  recent_cpu    priority   thread
 ticks   A   B   C   A   B   C   to run
 -----  --  --  --  --  --  --   ------
- 0
- 4
- 8
-12
+ 0      0   1   2   63  61  59     A 
+ 4      4   1   2   62  61  59     A
+ 8      7   1   2   61  61  59     B
+12      6   6   6   61  59  58     A
 16
 20
 24
@@ -203,6 +214,10 @@ ticks   A   B   C   A   B   C   to run
 >> abstraction layer for fixed-point math, that is, an abstract data
 >> type and/or a set of functions or macros to manipulate fixed-point
 >> numbers, why did you do so?  If not, why not?
+To implement the fixed-point arithmetic we used function macros defined
+in a separate header file. Creating a macro was an easy way to reference
+operations without having to repeat the calculation for constants like
+'f' in fixed-point arithmetic.
 
                SURVEY QUESTIONS
                ================

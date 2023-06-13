@@ -99,7 +99,7 @@ struct thread
 
     /* New attribute for Project 1 Alarm Clock implementation */
     int64_t wakeup_tick;                /* Wake up curr thread if 
-                                           wakeup_tick = 0 */
+                                           wakeup_tick = global_tick */
 
     /* New attribute for Project 1 Advanced Scheduler implementation */
     int nice;                           /* Nice value of thread */
@@ -152,21 +152,17 @@ int thread_get_load_avg (void);
 
 /* New functions for Project 1 Alarm Clock implementation */
 
-/* Sleep a thread for wake_tick ticks */
 void thread_sleep (int64_t wake_tick);
-
-/* Checks to see if wakeup_ticks is 0. If true, thread
-   needs to wake up */
 void thread_check_wake (void);
 
 /* New functions for Project 1 MLFQ implementation */
 
 void calculate_load_avg (void);
-void calculate_recent_cpu (void);
-void calculate_thread_priority (void);
+void calculate_recent_cpu (struct thread *t, void *aux UNUSED);
+void calculate_thread_priority (struct thread *t, void *aux UNUSED);
 void thread_incr_recent_cpu (void);
 void thread_calculate_all_cpu (void);
-
+void thread_calculate_all_priority (void);
 /* Additional functions */
 void thread_update_priority(struct thread *t);
 void thread_donate_priority(struct thread *t);
