@@ -214,23 +214,30 @@ lock_acquire (struct lock *lock)
   struct thread *cur = thread_current ();
   // Lock is held by other thread
   if (lock->holder != NULL) {
+    // Save lock current thread is waiting for
+    cur->waiting_for = lock;
     struct lock *temp = lock;
     // For nested donation  
     while (temp != NULL && temp->max_priority < cur->priority)
     {
-      /* Update max priority */
+      // Update max priority
       temp->max_priority = cur->priority;
-      /* Donate priority to its holder thread */
+      // Donate priority to its holder thread
       thread_donate_priority(temp->holder);
       temp = temp->holder->waiting_for;
     }
   }
 
+  enum intr_level old_level = intr_disable();
+
+  cur = thread_current ();
   sema_down (&lock->semaphore);
   cur->waiting_for = NULL;  /* No longer waiting for lock */
   lock->max_priority = cur->priority; /* Highest priority thread replaces */
   thread_hold_lock(lock);
   lock->holder = thread_current ();
+  
+  intr_set_level(old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false

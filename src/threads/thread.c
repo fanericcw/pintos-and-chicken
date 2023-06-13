@@ -804,6 +804,36 @@ thread_less_func (const struct list_elem *a,
   struct thread *b_thread = list_entry(b, struct thread, elem);
   return a_thread->priority > b_thread->priority;
 }
+
+/* Thread takes ownership of lock */
+void
+thread_hold_lock(struct lock *lock)
+{
+  enum intr_level old_level = intr_disable();
+  struct thread *cur = thread_current();
+  list_insert_ordered(&cur->locks_held, &lock->lock_elem, 
+  lock_priority_cmp, NULL);
+
+  /* Donate the lock's priority */
+  if (cur->priority < lock->max_priority)
+  {
+    cur->priority = lock->max_priority;
+	  thread_yield();
+  }
+
+  intr_set_level(old_level);
+}
+
+/* Thread relinquishes ownership of lock */
+void
+thread_remove_lock(struct lock *lock)
+{
+  enum intr_level old_level = intr_disable();
+  list_remove(&lock->lock_elem);
+  thread_update_priority(thread_current());
+
+  intr_set_level(old_level);
+}
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */

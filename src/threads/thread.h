@@ -166,6 +166,7 @@ void thread_calculate_all_priority (void);
 /* Additional functions */
 void thread_update_priority(struct thread *t);
 void thread_donate_priority(struct thread *t);
+void thread_hold_lock(struct lock *lock);
 void thread_remove_lock(struct lock *lock);
 
 #endif /* threads/thread.h */
