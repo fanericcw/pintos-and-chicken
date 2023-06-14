@@ -209,23 +209,41 @@ static int load_avg;            /* System load average */
 timer  recent_cpu    priority   thread
 ticks   A   B   C   A   B   C   to run
 -----  --  --  --  --  --  --   ------
- 0      0   1   2   63  61  59     A 
- 4      4   1   2   62  61  59     A
- 8      7   1   2   61  61  59     B
-12      6   6   6   61  59  58     A
-16
-20
-24
-28
-32
-36
+ 0      0   0   0   63  61  59     A 
+ 4      4   0   0   62  61  59     A
+ 8      8   0   0   61  61  59     B      
+12      8   4   0   61  60  59     A
+16      12  4   0   60  60  59     B
+20      12  8   0   60  59  59     A
+24      16  8   0   59  59  59     C
+28      16  8   4   59  59  58     B
+32      16  12  4   59  58  58     A
+36      20  12  4   58  58  58     C
 
 >> C3: Did any ambiguities in the scheduler specification make values
 >> in the table uncertain?  If so, what rule did you use to resolve
 >> them?  Does this match the behavior of your scheduler?
 
+One ambiguity that made the table uncertain is when the recent_cpu was
+updated and when priority is calculated for the current running thread.
+To match the consistency with our scheduler, we incremented the tick first
+and then calculated the current running thread. Another ambiguity is how
+to round-robin schedule same priority threads. To resolve this issue,
+the thread that hasn't used the CPU the longest would be chosen to run.
+For example, if thread A reccently used the CPU and has the same priority
+as thread B but thread B has not used the CPU in a while, thread B will 
+be chosen to run next.
+
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
+
+Our code implements calculations for load_avg, recent_cpu, and priority
+inside an interrupt context. This will likely affect the performance
+since the implementation for the BSD Scheduler specifies that load_avg,
+recent_cpu, and priority to be done every 100 or 4 ticks. In the case
+where the calculation takes more than this time, race conditions may
+possibly occur since we are inside an interrupt context. Thus our threads
+will begin to preempt and slow down the performance.
 
 ---- RATIONALE ----
 
@@ -234,15 +252,28 @@ ticks   A   B   C   A   B   C   to run
 >> time to work on this part of the project, how might you choose to
 >> refine or improve your design?
 
+Advantages: 
+- recent_cpu, load_avg, and priority calculations separated by
+  function
+- fixed-point.h for efficient fixed point arithmetic.
+
+Disadvantages:
+- list_sort() and list_insert_ordered() are operations that loop through
+  the entire list which can be time consuming and mess up the timing.
+
+If we had more time, a better design would to create an efficient data
+structure for the multi level feed queue rather than use the ready_list.
+
 >> C6: The assignment explains arithmetic for fixed-point math in
 >> detail, but it leaves it open to you to implement it.  Why did you
 >> decide to implement it the way you did?  If you created an
 >> abstraction layer for fixed-point math, that is, an abstract data
 >> type and/or a set of functions or macros to manipulate fixed-point
 >> numbers, why did you do so?  If not, why not?
+
 To implement the fixed-point arithmetic we used function macros defined
 in a separate header file. Creating a macro was an easy way to reference
-operations without having to repeat the calculation for constants like
+operations without having to repeat the calculations or constants like
 'f' in fixed-point arithmetic.
 
                SURVEY QUESTIONS

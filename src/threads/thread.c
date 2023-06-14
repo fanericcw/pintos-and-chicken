@@ -245,6 +245,9 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  if (thread_mlfqs)
+    calculate_thread_priority (t, NULL);
+
   /* Preempt the current thread */
   if (thread_current()->priority < priority)
     thread_yield();
@@ -455,6 +458,8 @@ int
 thread_get_nice (void) 
 {
   return thread_current ()->nice;
+  calculate_recent_cpu (thread_current (), NULL);
+  calculate_thread_priority (thread_current (), NULL);
 }
 
 /* Calculate thread's priority based on 4.4BSD Scheduler */
@@ -484,7 +489,6 @@ calculate_load_avg (void)
 {
   struct thread *curr = thread_current ();
   /* ready_threads not counting idle thread */
-  // int ready_threads = list_size(&ready_list);
   int ready_threads = curr != idle_thread ? 
           list_size(&ready_list) + 1 : list_size(&ready_list);
   load_avg = FP_MULT(FP_DIV_INT(INT_TO_FP(59),60), load_avg) + 
@@ -510,6 +514,7 @@ void
 thread_calculate_all_priority (void)
 {
   thread_foreach (calculate_thread_priority, NULL);
+  list_sort (&ready_list, thread_less_func, NULL);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
