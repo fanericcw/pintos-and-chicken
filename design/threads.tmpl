@@ -135,10 +135,18 @@ thread is popped off the list and unblocked
 >> B4: Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
 
-
+If the lock the thread is trying to acquire is held by another thread, 
+the thread, the thread saves the lock as the one it is waiting for, 
+recursively checks the lock's owner until it reaches a lock owner that
+is not waiting for a lock. During the process, each lock with a max_priority
+less than the current thread inherits the current thread's priority.
 
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
+
+The lock first resets its holder, then the thread removes the lock from its
+locks_held list, before returning to its original priority. Then the higher
+priority acquires the lock.
 
 ---- SYNCHRONIZATION ----
 
@@ -146,12 +154,30 @@ thread is popped off the list and unblocked
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
+For example, a thread with no previous donations calls the function, and 
+before the priority of the thread is updated, the CPU swaps to another thread
+which causes a priority donation to the current thread. If this priority
+donation is higher than new_priority of thread_set_priority(), then
+thread_set_priority() "wins" and the effective priority of the thread
+uses the new_priority passed into the function instead of the donated
+value.
 
+To avoid this, the function disables interrupts before updating its
+priority, preventing other threads from preempting it.
+
+A lock can be used to avoid the race condition, but will affect the
+if-statement in thread_set_priority(), as a thread which originally
+holds no locks now holds one, causing it to not yield the thread at
+all.
 
 ---- RATIONALE ----
 
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+The original design was to have threads keep track of their donors instead of
+their locks held. However, keeping track of the locks makes it easier to find
+the highest max_priority across the locks
 
               ADVANCED SCHEDULER
               ==================
