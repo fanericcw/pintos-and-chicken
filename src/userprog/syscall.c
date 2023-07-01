@@ -1,5 +1,7 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include "devices/shutdown.h"
+#include "threads/vaddr.h"
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -44,7 +46,6 @@ put_user (uint8_t *udst, uint8_t byte)
 static void
 copy_in (void *dst_, const void*usrc_, size_t size)
 {
-  // TODO: IMPLEMENT ERROR CHECKING
   uint8_t *dst = dst_;
   const uint8_t *usrc = usrc_;
 
@@ -55,18 +56,34 @@ copy_in (void *dst_, const void*usrc_, size_t size)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
+  if (!is_user_vaddr (f->esp))
+    thread_exit ();
   // TODO: REWRITE THIS SECTION
   unsigned syscall_number;
   int args[3];
 
   // Extracting syscall number
   copy_in (&syscall_number, f->esp, sizeof (syscall_number));
-  printf("Calling syscall: %u\n", syscall_number);
+  // printf("Calling syscall: %u\n", syscall_number);
 
-  if (syscall_number == 1) {
+  if (syscall_number == SYS_HALT) 
+  {
+    shutdown_power_off();
+  }
+  if (syscall_number == SYS_EXIT) 
+  {
+    copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
+    printf("%s: exit(%d)\n", thread_name(), args[0]);
+
     thread_exit();
   }
-  if (syscall_number == 9) {
+  if (syscall_number == SYS_WAIT)
+  {
+    copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
+    f->eax = process_wait(args[0]);
+  }
+  if (syscall_number == SYS_WRITE) 
+  {
     copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args) * 3);
     // printf("fd: %d (should be %u)\n", args[0], STDOUT_FILENO);
     // printf("buffer address: %p\n", args[1]);

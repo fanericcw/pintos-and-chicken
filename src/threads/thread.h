@@ -3,6 +3,7 @@
 
 #include <debug.h>
 #include <list.h>
+#include "threads/synch.h"
 #include <stdint.h>
 
 /* States in a thread's life cycle. */
@@ -104,15 +105,26 @@ struct thread
     /* New attribute for Project 1 Advanced Scheduler implementation */
     int nice;                           /* Nice value of thread */
     int recent_cpu;                     /* Recent CPU value of thread */
-      
+   
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    struct thread *parent;              /* Parent thread */
+    struct list child_list;             /* List of child threads */
 #endif
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+struct child_process
+{
+   tid_t tid;
+   int exit_status;
+   bool has_exited;
+   struct list_elem child_elem;
+   struct semaphore waiting;           /* Semaphore for waiting */
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -168,5 +180,5 @@ void thread_update_priority(struct thread *t);
 void thread_donate_priority(struct thread *t);
 void thread_hold_lock(struct lock *lock);
 void thread_remove_lock(struct lock *lock);
-
+struct thread *find_thread(tid_t tid);
 #endif /* threads/thread.h */

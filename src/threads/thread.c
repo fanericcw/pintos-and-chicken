@@ -365,6 +365,23 @@ thread_yield (void)
   intr_set_level (old_level);
 }
 
+/* Find thread by TID*/
+struct thread *
+find_thread(tid_t tid)
+{
+  struct list_elem *e;
+  struct thread *t;
+
+  for (e = list_begin (&all_list); e != list_end (&all_list);
+       e = list_next (e))
+  {
+    t = list_entry (e, struct thread, allelem);
+    if (t->tid == tid)
+      return t;
+  }
+  return NULL;
+}
+
 /* Invoke function 'func' on all threads, passing along 'aux'.
    This function must be called with interrupts off. */
 void
@@ -634,6 +651,11 @@ init_thread (struct thread *t, const char *name, int priority)
       t->recent_cpu = thread_get_recent_cpu ();
     }
   }
+
+  #ifdef USERPROG
+    /* Initialize child process list */
+    list_init (&t->child_list);
+  #endif
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
