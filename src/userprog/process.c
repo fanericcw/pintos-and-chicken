@@ -30,6 +30,7 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
+  struct child_process *child_process = malloc(sizeof(struct child_process));
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -42,6 +43,13 @@ process_execute (const char *file_name)
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+
+  struct thread *cur = thread_current();
+  child_process->tid = tid;
+  child_process->exit_status = -1;
+  child_process->has_exited = false;
+  sema_init(&child_process->waiting, 0);
+  list_push_front(&cur->child_list, &child_process->child_elem);
   return tid;
 }
 
@@ -99,6 +107,14 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  struct thread *child = find_thread(cur->tid);
+  struct list_elem *e;
+  struct child_process *child_process = list_entry(e, struct child_process, child_elem);
+
+  child_process->has_exited = true;
+  child_process->exit_status = 0;
+
+  sema_up(&child_process->waiting);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
