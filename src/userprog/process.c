@@ -44,12 +44,6 @@ process_execute (const char *file_name)
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
 
-  struct thread *cur = thread_current();
-  child_process->tid = tid;
-  child_process->exit_status = -1;
-  child_process->has_exited = false;
-  sema_init(&child_process->waiting, 0);
-  list_push_front(&cur->child_list, &child_process->child_elem);
   return tid;
 }
 
@@ -96,8 +90,35 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  while (1){}
-  return -1;
+  struct thread *cur = thread_current();
+  struct list *child_list = &cur->child_list;
+  struct child_process *child_process;
+  struct list_elem *e = list_front(child_list);
+  
+  if (list_empty(child_list))
+    return -1;
+  while(e != list_end(child_list))
+  {
+    child_process = list_entry(e, struct child_process, child_elem);
+    if (child_process->tid == child_tid)
+    {
+      break;
+    }
+    e = list_next(e);
+  }
+
+  if (child_process == NULL)
+    return -1;
+  if (child_process->has_exited)
+  {
+    list_remove(e);
+    return child_process->exit_status;
+  }
+  else 
+  {
+    sema_down(&child_process->waiting);
+  }
+  return child_process->exit_status;
 }
 
 /* Free the current process's resources. */
@@ -107,13 +128,24 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  struct thread *child = find_thread(cur->tid);
-  struct list_elem *e;
-  struct child_process *child_process = list_entry(e, struct child_process, child_elem);
+  struct list *child_list = &cur->parent->child_list;
+  struct child_process *child_process;
+  struct list_elem *e = list_front(child_list);
+  
+  if (list_empty(child_list))
+    return -1;
+  while(e != list_end(child_list))
+  {
+    child_process = list_entry(e, struct child_process, child_elem);
+    if (child_process->tid == cur->tid)
+    {
+      break;
+    }
+    e = list_next(e);
+  }
 
   child_process->has_exited = true;
   child_process->exit_status = 0;
-
   sema_up(&child_process->waiting);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -488,7 +520,7 @@ setup_stack (void **esp, const char *file_name)
         *esp -= 4;
         memset(*esp, 0, 4);
 
-        hex_dump((uintptr_t)PHYS_BASE - 32, *esp, 32, true);
+        // hex_dump((uintptr_t)PHYS_BASE - 32, *esp, 32, true);
       }
       else
         palloc_free_page (kpage);

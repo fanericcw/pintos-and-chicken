@@ -227,6 +227,15 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+  #ifdef USERPROG
+  struct child_process *child_process = malloc(sizeof(struct child_process));
+  struct thread *cur = thread_current();
+  child_process->tid = tid;
+  child_process->exit_status = -1;
+  child_process->has_exited = false;
+  sema_init(&child_process->waiting, 0);
+  list_push_back(&(cur->child_list), &(child_process->child_elem));
+  #endif
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -655,6 +664,7 @@ init_thread (struct thread *t, const char *name, int priority)
   #ifdef USERPROG
     /* Initialize child process list */
     list_init (&t->child_list);
+    t->parent = running_thread ();
   #endif
 
   old_level = intr_disable ();
