@@ -39,8 +39,12 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  char *prog_name = malloc(strlen(file_name) + 1);
+  prog_name = strtok_r(file_name, " ", &file_name);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (prog_name, PRI_DEFAULT, start_process, fn_copy);
+  // free(prog_name);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
 
@@ -62,6 +66,7 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  // success = true;
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -244,7 +249,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp, const char *file_name);
+static bool setup_stack (void **esp, const char **argv, int argc);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -270,8 +275,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  char *fn_copy = malloc(strlen(file_name) + 1);
+  strlcpy(fn_copy, file_name, strlen(file_name) + 1);
+  char *prog_name = malloc(strlen(fn_copy) + 1);
+  prog_name = strtok_r(fn_copy, " ", &fn_copy);
+  // free(fn_copy);
+
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (prog_name);
+  // free(prog_name);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -350,8 +362,18 @@ load (const char *file_name, void (**eip) (void), void **esp)
         }
     }
 
+  /* Tokenize argv[i] */
+  char *argv[40];
+  char *token;
+  int argc = 0;
+  strlcpy(fn_copy, file_name, strlen(file_name) + 1);
+  while ((token = strtok_r(fn_copy, " ", &fn_copy))) {
+    argv[argc] = token;
+    argc++;
+  }
+
   /* Set up stack. */
-  if (!setup_stack (esp, file_name))
+  if (!setup_stack (esp, argv, argc))
     goto done;
 
   /* Start address. */
@@ -476,7 +498,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp, const char *file_name) 
+setup_stack (void **esp, const char **argv, int argc) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -487,13 +509,19 @@ setup_stack (void **esp, const char *file_name)
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
       {
-        char *temp;
-        // push command
+        char *argv_ptr[40];
+
+        // push commands
         *esp = PHYS_BASE;
-        int file_len = strlen(file_name) + 1;
-        *esp -= file_len;
-        temp = *esp;
-        memcpy(*esp, file_name, file_len);
+        for (int i = argc - 1; i >= 0; i--)
+        {
+          int argv_len = strlen(argv[i]) + 1;
+          *esp -= argv_len;
+          memcpy(*esp, argv[i], argv_len);
+          argv_ptr[i] = (char *) *esp;
+        }
+
+        // All argv_ptr and commands inserted correctly
 
         // Word align
         *esp -= (uintptr_t)*esp % 4;
@@ -503,18 +531,20 @@ setup_stack (void **esp, const char *file_name)
         *esp -= 4;
         memset(*esp, 0, 4);
 
-        // TODO: push argv[i]
-        *esp -= 4;
-        memcpy(*esp, &temp, sizeof(char*));
-        temp = *esp;
+        // push argv[i]
+        for (int i = argc - 1; i >= 0; i--)
+        {
+          *esp -= 4;
+          *((char **) *esp) = argv_ptr[i];
+        }
       
         // push argv
         *esp -= 4;
-        memcpy(*esp, &temp, sizeof(char*));
+        *((char ***) *esp) = (char **) *esp + 1;
 
         // push argc
         *esp -= 4;
-        memset(*esp, 1, 1);
+        memcpy(*esp, &argc, sizeof(int *));
         
         // push return address
         *esp -= 4;
