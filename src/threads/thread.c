@@ -233,6 +233,7 @@ thread_create (const char *name, int priority,
   child_process->tid = tid;
   child_process->exit_status = -1;
   child_process->has_exited = false;
+  child_process->first_load = true;
   sema_init(&child_process->waiting, 0);
   list_push_back(&(cur->child_list), &(child_process->child_elem));
   #endif
@@ -338,12 +339,12 @@ thread_tid (void)
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
 void
-thread_exit (void) 
+thread_exit (int status) 
 {
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
-  process_exit ();
+  process_exit (status);
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -605,7 +606,7 @@ kernel_thread (thread_func *function, void *aux)
 
   intr_enable ();       /* The scheduler runs with interrupts off. */
   function (aux);       /* Execute the thread function. */
-  thread_exit ();       /* If function() returns, kill the thread. */
+  thread_exit (0);       /* If function() returns, kill the thread. */
 }
 
 /* Returns the running thread. */

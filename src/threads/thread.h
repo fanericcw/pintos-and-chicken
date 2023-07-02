@@ -120,9 +120,10 @@ struct thread
 struct child_process
 {
    tid_t tid;
-   int exit_status;
-   bool has_exited;
-   struct list_elem child_elem;
+   int exit_status;                    /* Exit status of child process */     
+   bool has_exited;                    /* Has child exited */
+   bool first_load;                    /* First load of child process */
+   struct list_elem child_elem;        /* List element for child list */
    struct semaphore waiting;           /* Semaphore for waiting */
 };
 
@@ -147,7 +148,7 @@ struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
 
-void thread_exit (void) NO_RETURN;
+void thread_exit (int status) NO_RETURN;
 void thread_yield (void);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */

@@ -1,6 +1,9 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include "devices/shutdown.h"
+#include "process.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
 #include "threads/vaddr.h"
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
@@ -53,46 +56,74 @@ copy_in (void *dst_, const void*usrc_, size_t size)
     *dst = get_user (usrc);
 }
 
+
+void 
+halt (void)
+{
+  shutdown_power_off();
+}
+void 
+exit (int status)
+{
+  printf("%s: exit(%d)\n", thread_name(), status);
+  thread_exit(status);
+}
+
+pid_t
+exec (const char *cmd_line)
+{
+  return process_execute(cmd_line);
+}
+
+int
+wait (pid_t pid)
+{
+  return process_wait(pid);
+}
+
+int
+write (int fd, const void *buffer, unsigned size)
+{
+  if (fd == 1)
+  {
+    putbuf(buffer, size);
+    return size;
+  }
+  else
+    return -1;
+}
+
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   if (!is_user_vaddr (f->esp))
-    thread_exit ();
-  // TODO: REWRITE THIS SECTION
+    exit (-1);
   unsigned syscall_number;
   int args[3];
 
   // Extracting syscall number
   copy_in (&syscall_number, f->esp, sizeof (syscall_number));
-  // printf("Calling syscall: %u\n", syscall_number);
 
-  if (syscall_number == SYS_HALT) 
+  switch (syscall_number)
   {
-    shutdown_power_off();
-  }
-  if (syscall_number == SYS_EXIT) 
-  {
-    copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
-    printf("%s: exit(%d)\n", thread_name(), args[0]);
-
-    thread_exit();
-  }
-  if (syscall_number == SYS_WAIT)
-  {
-    copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
-    f->eax = process_wait(args[0]);
-  }
-  if (syscall_number == SYS_WRITE) 
-  {
-    copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args) * 3);
-    // printf("fd: %d (should be %u)\n", args[0], STDOUT_FILENO);
-    // printf("buffer address: %p\n", args[1]);
-    // printf("size: %d\n", args[2]);
-
-    // write on STDOUT_FILENO
-    putbuf (args[1], args[2]);
-
-    // set the returned value
-    f->eax = args[2];
+    case SYS_HALT:
+      halt ();
+      break;  
+    case SYS_EXIT:
+      copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
+      exit(args[0]);
+      break;
+    case SYS_EXEC:
+      copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
+      f->eax = exec((const char*)args[0]);
+      break;
+    case SYS_WAIT:
+      copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
+      f->eax = wait((pid_t)args[0]);
+      break;
+    case SYS_WRITE:
+      copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args) * 3);
+      f->eax = write((int)args[0], (const void*)args[1], (unsigned)args[2]);
+      break;
   }
 }

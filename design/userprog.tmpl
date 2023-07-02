@@ -8,8 +8,7 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Arwin Fong arwin.fong@mail.utoronto.ca
 FirstName LastName <email@domain.example>
 
 ---- PRELIMINARIES ----
@@ -53,6 +52,30 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+
+struct child_process
+{
+   tid_t tid;
+   int exit_status;                    /* Exit status of child process */     
+   bool has_exited;                    /* Has child exited */
+   bool first_load;                    /* First load of child process */
+   struct list_elem child_elem;        /* List element for child list */
+   struct semaphore waiting;           /* Semaphore for waiting */
+}
+
+struct thread
+{
+    /* Same attributes */
+
+    // New additions
+    #ifdef USERPROG
+    /* Owned by userprog/process.c. */
+    uint32_t *pagedir;                  /* Page directory. */
+    struct thread *parent;              /* Parent thread */
+    struct list child_list;             /* List of child threads */
+    #endif
+}
+
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
@@ -71,6 +94,17 @@ FirstName LastName <email@domain.example>
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
+
+Our implementation of the "wait" system call pops the pid of the 
+child process off the stack and calls process_wait with that pid.
+
+In process_wait, we check if the current thread has no children. If 
+the current thread has no children then we return -1 else the algorithm 
+searches through the current thread's child_list to find the child_process
+with pid child_tid.
+
+If the child process has terminated, we remove the child_process from
+the current_thread's child_list and return its exit status.
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the

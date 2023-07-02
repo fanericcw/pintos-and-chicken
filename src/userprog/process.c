@@ -16,6 +16,7 @@
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
+#include "threads/malloc.h"
 #include "threads/vaddr.h"
 
 static thread_func start_process NO_RETURN;
@@ -30,7 +31,6 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-  struct child_process *child_process = malloc(sizeof(struct child_process));
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -71,7 +71,7 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
-    thread_exit ();
+    thread_exit (-1);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -114,21 +114,26 @@ process_wait (tid_t child_tid UNUSED)
 
   if (child_process == NULL)
     return -1;
-  if (child_process->has_exited)
-  {
-    list_remove(e);
-    return child_process->exit_status;
+  if (child_process->first_load){
+    child_process->first_load = false;
+    if (child_process->has_exited)
+    {
+      list_remove(e);
+      return child_process->exit_status;
+    }
+    else 
+    {
+      sema_down(&child_process->waiting);
+    }
   }
   else 
-  {
-    sema_down(&child_process->waiting);
-  }
+    return -1;
   return child_process->exit_status;
 }
 
 /* Free the current process's resources. */
 void
-process_exit (void)
+process_exit (int status)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
@@ -138,7 +143,7 @@ process_exit (void)
   struct list_elem *e = list_front(child_list);
   
   if (list_empty(child_list))
-    return -1;
+    return;
   while(e != list_end(child_list))
   {
     child_process = list_entry(e, struct child_process, child_elem);
@@ -150,7 +155,7 @@ process_exit (void)
   }
 
   child_process->has_exited = true;
-  child_process->exit_status = 0;
+  child_process->exit_status = status;
   sema_up(&child_process->waiting);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
