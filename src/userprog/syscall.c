@@ -38,6 +38,8 @@ syscall_init (void)
 static int
 get_user (const uint8_t *uaddr)
 {
+  if (!is_user_vaddr(uaddr) || !pagedir_get_page(thread_current()->pagedir, uaddr))
+    return -1;
   int result;
   asm ("movl $1f, %0; movzbl %1, %0; 1:"
        : "=&a" (result) : "m" (*uaddr));
@@ -88,14 +90,6 @@ get_sys_file(int fd)
     e = list_next(e);
   }
 }
-
-// bool
-// check_bad_ptr (void * ptr) 
-// {
-//   if (ptr > PHYS_BASE || ptr < return_address) {
-    
-//   }
-// }
 
 void 
 halt (void)
@@ -337,6 +331,21 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_WRITE:
       copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args) * 3);
       f->eax = write((int)args[0], (const void*)args[1], (unsigned)args[2]);
+      break;
+    case SYS_SEEK:
+      copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args) * 2);
+      seek((int)args[0], (unsigned)args[1]);
+      break;
+    case SYS_TELL:
+      copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
+      f->eax = tell((int)args[0]);
+      break;
+    case SYS_CLOSE:
+      copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
+      close((int)args[0]);
+      break;
+    default:
+      exit(-1);
       break;
   }
 }
