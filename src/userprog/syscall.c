@@ -89,6 +89,7 @@ get_sys_file(int fd)
       break;
     e = list_next(e);
   }
+  return NULL;
 }
 
 void 
@@ -96,11 +97,29 @@ halt (void)
 {
   shutdown_power_off();
 }
+
+void close_thread_files(tid_t tid) {
+  if (list_empty(&all_files))
+    return;
+  struct list_elem *e = list_head(&all_files);
+  while(e != list_end(&all_files))
+  {
+    struct sys_file *open_file = list_entry(e, struct sys_file, file_elem);
+    if (open_file->fd_owner == tid)
+    {
+      list_remove(e);
+    }
+    e = list_next(e);
+  }
+}
+
 void 
 exit (int status)
 {
   printf("%s: exit(%d)\n", thread_name(), status);
   thread_exit(status);
+  tid_t cur_tid = thread_current()->tid;
+  close_thread_files(cur_tid);
 }
 
 /* Find thread by TID*/
@@ -276,6 +295,8 @@ void
 close (int fd)
 {
   struct sys_file *sys_file = get_sys_file(fd);
+  if (sys_file == NULL)
+    exit(-1);
   file_close(sys_file->file);
   list_remove(&sys_file->file_elem);
 }

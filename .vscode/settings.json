@@ -6,7 +6,8 @@
         "interrupt.h": "c",
         "init.h": "c",
         "shutdown.h": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "pagedir.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }
