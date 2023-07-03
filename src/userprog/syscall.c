@@ -17,13 +17,16 @@ static bool put_user (uint8_t *udst, uint8_t byte);
  /* An autoincremented unique number for each fd */
 static int fd_num = 1;           
 /* List of all open files */
-struct list all_files;            
+struct list all_files;
+/* Lock for synch */
+struct lock call_lock;        
 
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   list_init(&all_files);
+  lock_init(&call_lock);
 }
 
  	
@@ -107,6 +110,8 @@ exit (int status)
 pid_t
 exec (const char *cmd_line)
 {
+  if (!is_user_vaddr(cmd_line) || !pagedir_get_page(thread_current()->pagedir, cmd_line))
+    exit(-1);
   return process_execute(cmd_line);
 }
 
@@ -123,18 +128,30 @@ wait (pid_t pid)
 bool
 create(const char *file, unsigned initial_size)
 {
-  return filesys_create(file, initial_size);
+  if (!is_user_vaddr(file) || !pagedir_get_page(thread_current()->pagedir, file))
+    exit(-1);
+  lock_acquire(&call_lock);
+  bool success = filesys_create(file, initial_size);
+  lock_release(&call_lock);
+  return success;
 }
 
 // TODO: Implement removing open file
 bool 
 remove(const char *file)
 { 
-  return filesys_remove(file);
+  if (!is_user_vaddr(file) || !pagedir_get_page(thread_current()->pagedir, file))
+    exit(-1);
+  lock_acquire(&call_lock);
+  bool success = filesys_remove(file);
+  lock_release(&call_lock);
+  return success;
 }
 
 int open(const char *file)
 {
+  if (!is_user_vaddr(file) || !pagedir_get_page(thread_current()->pagedir, file))
+    exit(-1);
   struct file *open_file;
   struct sys_file *sys_file = malloc(sizeof(*sys_file));
 
@@ -162,6 +179,8 @@ int filesize(int fd)
 int 
 read (int fd, void *buffer, unsigned size)
 {
+  if (!is_user_vaddr(buffer) || !pagedir_get_page(thread_current()->pagedir, buffer))
+    exit(-1);
   if (fd == STDOUT_FILENO)
     return -1;
   if (fd == STDIN_FILENO)
@@ -189,6 +208,8 @@ read (int fd, void *buffer, unsigned size)
 int
 write (int fd, const void *buffer, unsigned size)
 {
+  if (!is_user_vaddr(buffer) || !pagedir_get_page(thread_current()->pagedir, buffer))
+    exit(-1);
   if (fd == STDIN_FILENO)
     return -1;
   if (fd == STDOUT_FILENO)
@@ -207,12 +228,14 @@ write (int fd, const void *buffer, unsigned size)
 void 
 seek (int fd, unsigned position)
 {
-  return;
+  struct sys_file *sys_file = get_sys_file(fd);
+  file_seek(sys_file->file, position);
 }
 unsigned 
 tell (int fd)
 {
-  return -1;
+  struct sys_file *sys_file = get_sys_file(fd);
+  file_tell(sys_file->file);
 }
 void 
 close (int fd)
@@ -249,7 +272,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = wait((pid_t)args[0]);
       break;
     case SYS_CREATE:
-      copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
+      copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args) * 2);
       f->eax = create((const char*) args[0], (unsigned) args[1]);
       break;
     case SYS_REMOVE:
