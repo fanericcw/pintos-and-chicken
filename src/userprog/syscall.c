@@ -9,6 +9,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "lib/kernel/list.h"
+#include "pagedir.h"
 
 static void syscall_handler (struct intr_frame *);
 static int get_user (const uint8_t *uaddr);
@@ -128,8 +129,9 @@ find_child(tid_t tid, struct list child_list)
 pid_t
 exec (const char *cmd_line)
 {
+  /* Check end of cmd_line instead of start to see if it execceds pg bound */
   if (!is_user_vaddr(cmd_line) || 
-  !pagedir_get_page(thread_current()->pagedir, cmd_line))
+  !pagedir_get_page(thread_current()->pagedir, cmd_line + sizeof(cmd_line)))
     exit(-1);
   struct thread *parent = thread_current();
   tid_t pid = -1;
@@ -279,7 +281,9 @@ tell (int fd)
 void 
 close (int fd)
 {
-  return;
+  struct sys_file *sys_file = get_sys_file(fd);
+  file_close(sys_file->file);
+  list_remove(&sys_file->file_elem);
 }
 
 static void
