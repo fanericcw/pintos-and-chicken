@@ -100,7 +100,7 @@ process_wait (tid_t child_tid UNUSED)
   struct thread *cur = thread_current();
   struct list *child_list = &cur->child_list;
   struct child_process *child_process;
-  if (list_empty(child_list))
+  if (list_empty(child_list) || child_tid == TID_ERROR)
     return -1;
   e = list_front(child_list);
   
