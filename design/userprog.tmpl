@@ -57,7 +57,8 @@ static int fd_num = 1;
 /* List of all open files */
 struct list all_files;
 /* Lock for synch */
-struct lock call_lock; 
+struct lock call_lock;
+struct lock load_lock;
 
 struct child_process
 {
@@ -68,6 +69,13 @@ struct child_process
    struct list_elem child_elem;        /* List element for child list */
    struct semaphore waiting;           /* Semaphore for waiting */
 }
+
+struct sys_file {
+    int fd;
+    tid_t fd_owner;
+    struct file *file;
+    struct list_elem file_elem;
+};
 
 struct thread
 {

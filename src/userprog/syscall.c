@@ -19,7 +19,7 @@ static bool put_user (uint8_t *udst, uint8_t byte);
 static int fd_num = 1;           
 /* List of all open files */
 struct list all_files;
-/* Lock for synch */
+/* Locks for synch */
 struct lock file_lock;
 struct lock load_lock;
 
@@ -29,6 +29,7 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   list_init(&all_files);
   lock_init(&file_lock);
+  lock_init(&load_lock);
 }
 
  	

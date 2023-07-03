@@ -15,7 +15,6 @@ struct sys_file {
 };
 
 void syscall_init (void);
-// bool check_bad_ptr (void *);
 
 // Syscalls
 void halt (void);
