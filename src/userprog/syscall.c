@@ -69,10 +69,11 @@ copy_in (void *dst_, const void*usrc_, size_t size)
 struct sys_file*
 get_sys_file(int fd)
 {
+  if (list_empty(&all_files))
+    return NULL;
+
   struct sys_file *temp;
   struct list_elem *e = list_front(&all_files);
-  if (list_empty(&all_files))
-    temp = NULL;
   /* Find corresponding file_elem in list*/
   while (1)
   {
@@ -179,6 +180,7 @@ int filesize(int fd)
 int 
 read (int fd, void *buffer, unsigned size)
 {
+  struct sys_file *sysfile;
   if (!is_user_vaddr(buffer) || !pagedir_get_page(thread_current()->pagedir, buffer))
     exit(-1);
   if (fd == STDOUT_FILENO)
@@ -196,6 +198,10 @@ read (int fd, void *buffer, unsigned size)
     }
     return actual_read;
   }
+  sysfile = get_sys_file(fd);
+  if (sysfile == NULL) {
+    return -1;
+  }
   else
   {
     struct sys_file *sys_file = get_sys_file(fd);
@@ -208,6 +214,7 @@ read (int fd, void *buffer, unsigned size)
 int
 write (int fd, const void *buffer, unsigned size)
 {
+  struct sys_file *sysfile;
   if (!is_user_vaddr(buffer) || !pagedir_get_page(thread_current()->pagedir, buffer))
     exit(-1);
   if (fd == STDIN_FILENO)
@@ -216,6 +223,10 @@ write (int fd, const void *buffer, unsigned size)
   {
     putbuf(buffer, size);
     return size;
+  }
+  sysfile = get_sys_file(fd);
+  if (sysfile == NULL) {
+    return -1;
   }
   else
   {
@@ -246,7 +257,7 @@ close (int fd)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  if (!is_user_vaddr (f->esp))
+  if (!is_user_vaddr (f->esp) || !pagedir_get_page (thread_current ()->pagedir, f->esp))
     exit (-1);
   unsigned syscall_number;
   int args[3];

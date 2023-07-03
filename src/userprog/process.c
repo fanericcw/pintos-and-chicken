@@ -95,13 +95,14 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  struct list_elem *e;
   struct thread *cur = thread_current();
   struct list *child_list = &cur->child_list;
   struct child_process *child_process;
-  struct list_elem *e = list_front(child_list);
-  
   if (list_empty(child_list))
     return -1;
+  e = list_front(child_list);
+  
   while(e != list_end(child_list))
   {
     child_process = list_entry(e, struct child_process, child_elem);
