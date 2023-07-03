@@ -108,12 +108,40 @@ exit (int status)
   thread_exit(status);
 }
 
+/* Find thread by TID*/
+struct child_process *
+find_child(tid_t tid, struct list child_list)
+{
+  struct list_elem *e;
+  struct child_process *c;
+
+  for (e = list_begin (&child_list); e != list_end (&child_list);
+       e = list_next (e))
+  {
+    c = list_entry (e, struct child_process, child_elem);
+    if (c->tid == tid)
+      return c;
+  }
+  return NULL;
+}
+
 pid_t
 exec (const char *cmd_line)
 {
-  if (!is_user_vaddr(cmd_line) || !pagedir_get_page(thread_current()->pagedir, cmd_line))
+  if (!is_user_vaddr(cmd_line) || 
+  !pagedir_get_page(thread_current()->pagedir, cmd_line))
     exit(-1);
-  return process_execute(cmd_line);
+  struct thread *parent = thread_current();
+  tid_t pid = -1;
+  pid = process_execute(cmd_line);
+
+  struct child_process *child = find_child(pid, parent->child_list);
+  /* Wait for child to finish */
+  sema_down(&child->waiting);
+  if (child->exit_status == -1) {
+    return -1;
+  }
+  return pid;
 }
 
 /* Above requires error checking */

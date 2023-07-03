@@ -40,7 +40,8 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   char *prog_name = malloc(strlen(file_name) + 1);
-  prog_name = strtok_r(file_name, " ", &file_name);
+  strlcpy(prog_name, file_name, strlen(file_name)+1);
+  prog_name = strtok_r(prog_name, " ", &prog_name);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (prog_name, PRI_DEFAULT, start_process, fn_copy);

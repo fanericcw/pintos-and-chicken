@@ -130,7 +130,7 @@ page_fault (struct intr_frame *f)
   void *fault_addr;  /* Fault address. */
 
   /* Obtain faulting address, the virtual address that was
-     accessed to cause the fault.  It may point to code or to 
+     accessed to cause the fault.  It may point to code or to
      data.  It is not necessarily the address of the instruction
      that caused the fault (that's f->eip).
      See [IA32-v2a] "MOV--Move to/from Control Registers" and
@@ -152,12 +152,6 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
-
-   /* open-bad-ptr: false, false false
-   */
-//   if () {
-//    exit(-1);
-//   }
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
