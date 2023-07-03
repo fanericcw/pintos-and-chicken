@@ -555,7 +555,7 @@ setup_stack (void **esp, const char **argv, int argc)
         *esp -= 4;
         memset(*esp, 0, 4);
 
-        // hex_dump((uintptr_t)PHYS_BASE - 32, *esp, 32, true);
+        // hex_dump((uintptr_t)PHYS_BASE - 64, *esp, 64, true);
       }
       else
         palloc_free_page (kpage);
