@@ -38,7 +38,8 @@ syscall_init (void)
 static int
 get_user (const uint8_t *uaddr)
 {
-  if (!is_user_vaddr(uaddr) || !pagedir_get_page(thread_current()->pagedir, uaddr))
+  if (!is_user_vaddr(uaddr) || !pagedir_get_page(
+                      thread_current()->pagedir, uaddr))
     return -1;
   int result;
   asm ("movl $1f, %0; movzbl %1, %0; 1:"
@@ -89,40 +90,9 @@ get_sys_file(int fd)
       break;
     e = list_next(e);
   }
-  return NULL;
 }
 
-void 
-halt (void)
-{
-  shutdown_power_off();
-}
-
-void close_thread_files(tid_t tid) {
-  if (list_empty(&all_files))
-    return;
-  struct list_elem *e = list_head(&all_files);
-  while(e != list_end(&all_files))
-  {
-    struct sys_file *open_file = list_entry(e, struct sys_file, file_elem);
-    if (open_file->fd_owner == tid)
-    {
-      list_remove(e);
-    }
-    e = list_next(e);
-  }
-}
-
-void 
-exit (int status)
-{
-  printf("%s: exit(%d)\n", thread_name(), status);
-  thread_exit(status);
-  tid_t cur_tid = thread_current()->tid;
-  close_thread_files(cur_tid);
-}
-
-/* Find thread by TID*/
+/* Find child_process by TID*/
 struct child_process *
 find_child(tid_t tid, struct list child_list)
 {
@@ -137,6 +107,19 @@ find_child(tid_t tid, struct list child_list)
       return c;
   }
   return NULL;
+}
+
+
+void 
+halt (void)
+{
+  shutdown_power_off();
+}
+void 
+exit (int status)
+{
+  printf("%s: exit(%d)\n", thread_name(), status);
+  thread_exit(status);
 }
 
 pid_t
@@ -159,20 +142,17 @@ exec (const char *cmd_line)
   return pid;
 }
 
-/* Above requires error checking */
-/* Below needs synch */
-
 int
 wait (pid_t pid)
 {
   return process_wait(pid);
 }
 
-/* TODO: Synchronize calls */
 bool
 create(const char *file, unsigned initial_size)
 {
-  if (!is_user_vaddr(file) || !pagedir_get_page(thread_current()->pagedir, file))
+  if (!is_user_vaddr(file) || !pagedir_get_page(
+                      thread_current()->pagedir, file))
     exit(-1);
   lock_acquire(&call_lock);
   bool success = filesys_create(file, initial_size);
@@ -180,11 +160,11 @@ create(const char *file, unsigned initial_size)
   return success;
 }
 
-// TODO: Implement removing open file
 bool 
 remove(const char *file)
 { 
-  if (!is_user_vaddr(file) || !pagedir_get_page(thread_current()->pagedir, file))
+  if (!is_user_vaddr(file) || !pagedir_get_page(
+                      thread_current()->pagedir, file))
     exit(-1);
   lock_acquire(&call_lock);
   bool success = filesys_remove(file);
@@ -194,7 +174,8 @@ remove(const char *file)
 
 int open(const char *file)
 {
-  if (!is_user_vaddr(file) || !pagedir_get_page(thread_current()->pagedir, file))
+  if (!is_user_vaddr(file) || !pagedir_get_page(
+                      thread_current()->pagedir, file))
     exit(-1);
   struct file *open_file;
   struct sys_file *sys_file = malloc(sizeof(*sys_file));
@@ -224,7 +205,8 @@ int
 read (int fd, void *buffer, unsigned size)
 {
   struct sys_file *sysfile;
-  if (!is_user_vaddr(buffer) || !pagedir_get_page(thread_current()->pagedir, buffer))
+  if (!is_user_vaddr(buffer) || !pagedir_get_page(
+                      thread_current()->pagedir, buffer))
     exit(-1);
   if (fd == STDOUT_FILENO)
     return -1;
@@ -258,7 +240,8 @@ int
 write (int fd, const void *buffer, unsigned size)
 {
   struct sys_file *sysfile;
-  if (!is_user_vaddr(buffer) || !pagedir_get_page(thread_current()->pagedir, buffer))
+  if (!is_user_vaddr(buffer) || !pagedir_get_page(
+                          thread_current()->pagedir, buffer))
     exit(-1);
   if (fd == STDIN_FILENO)
     return -1;
@@ -297,6 +280,8 @@ close (int fd)
   struct sys_file *sys_file = get_sys_file(fd);
   if (sys_file == NULL)
     exit(-1);
+  if (sys_file->fd_owner != thread_current()->tid)
+    exit(-1);
   file_close(sys_file->file);
   list_remove(&sys_file->file_elem);
 }
@@ -304,7 +289,8 @@ close (int fd)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  if (!is_user_vaddr (f->esp) || !pagedir_get_page (thread_current ()->pagedir, f->esp))
+  if (!is_user_vaddr (f->esp) || !pagedir_get_page (
+                      thread_current ()->pagedir, f->esp))
     exit (-1);
   unsigned syscall_number;
   int args[3];

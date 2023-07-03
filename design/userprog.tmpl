@@ -52,6 +52,12 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+/* An autoincremented unique number for each fd */
+static int fd_num = 1;           
+/* List of all open files */
+struct list all_files;
+/* Lock for synch */
+struct lock call_lock; 
 
 struct child_process
 {
@@ -80,10 +86,27 @@ struct thread
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
 
+When a file is opened, the file descriptor that is assigned is a the
+global variable fd_num. This variable is pre-incremented before we
+associate it with the open file. Therefore all fds will be 
+unique throughout the OS.
 ---- ALGORITHMS ----
 
 >> B3: Describe your code for reading and writing user data from the
 >> kernel.
+To read user data, our code will first check the fd that is passed into
+the function. If the fd = STDOUT_FILENO then we return -1 since we are
+not trying to output to the console. If the fd = STDIN_FILENO, we get
+user input via input_getc() (unsigned)size amount of times. Else if the
+fd is non-negative, that means we are reading from a file thus we read
+using the given file_read() function.
+
+To write user data, our code will first check the fd that is passed into
+the function. If the fd = STDIN_FILENO then we return -1 since we are 
+not trying to read user input on console. If the fd = STDOUT_FILENO, 
+we output the buffer using putbuf(). Else if the fd is non-negative,
+that means we are writing to a file thus we read using the given
+file_write() function.
 
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least
@@ -91,6 +114,7 @@ struct thread
 >> (e.g. calls to pagedir_get_page()) that might result?  What about
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
+
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
@@ -120,6 +144,11 @@ the current_thread's child_list and return its exit status.
 >> paragraphs, describe the strategy or strategies you adopted for
 >> managing these issues.  Give an example.
 
+Before we access the user program memory, we validate the address
+using is_user_vaddr() and pagedir_get_page(). If any of these conditions
+failed we want to terminate the process with exit(-1). 
+
+For example when a "read" system call happens, we first validate 
 ---- SYNCHRONIZATION ----
 
 >> B7: The "exec" system call returns -1 if loading the new executable
@@ -139,12 +168,18 @@ the current_thread's child_list and return its exit status.
 >> B9: Why did you choose to implement access to user memory from the
 >> kernel in the way that you did?
 
+
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
+Advantages:
+- Easy implementation for unique identification for fds to open files.
+
+Disadvantages:
+- If the OS opens too many fds overtime there may be an int overflow.
 
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
-
+There is no change in the identity mapping for tid_t and pid_t.
                SURVEY QUESTIONS
                ================
 
