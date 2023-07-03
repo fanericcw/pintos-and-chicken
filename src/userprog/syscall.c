@@ -20,14 +20,15 @@ static int fd_num = 1;
 /* List of all open files */
 struct list all_files;
 /* Lock for synch */
-struct lock call_lock;        
+struct lock file_lock;
+struct lock load_lock;
 
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   list_init(&all_files);
-  lock_init(&call_lock);
+  lock_init(&file_lock);
 }
 
  	
@@ -148,7 +149,9 @@ exec (const char *cmd_line)
     exit(-1);
   struct thread *parent = thread_current();
   tid_t pid = -1;
+  lock_acquire(&load_lock);
   pid = process_execute(cmd_line);
+  lock_release(&load_lock);
 
   struct child_process *child = find_child(pid, parent->child_list);
   /* Wait for child to finish */
@@ -174,9 +177,9 @@ create(const char *file, unsigned initial_size)
 {
   if (!is_user_vaddr(file) || !pagedir_get_page(thread_current()->pagedir, file))
     exit(-1);
-  lock_acquire(&call_lock);
+  lock_acquire(&file_lock);
   bool success = filesys_create(file, initial_size);
-  lock_release(&call_lock);
+  lock_release(&file_lock);
   return success;
 }
 
@@ -186,9 +189,9 @@ remove(const char *file)
 { 
   if (!is_user_vaddr(file) || !pagedir_get_page(thread_current()->pagedir, file))
     exit(-1);
-  lock_acquire(&call_lock);
+  lock_acquire(&file_lock);
   bool success = filesys_remove(file);
-  lock_release(&call_lock);
+  lock_release(&file_lock);
   return success;
 }
 
@@ -297,6 +300,9 @@ close (int fd)
   struct sys_file *sys_file = get_sys_file(fd);
   if (sys_file == NULL)
     exit(-1);
+  if (sys_file->fd_owner != thread_current()->tid) {
+    exit(-1);
+  }
   file_close(sys_file->file);
   list_remove(&sys_file->file_elem);
 }

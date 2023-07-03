@@ -9,7 +9,7 @@
 >> Fill in the names and email addresses of your group members.
 
 Arwin Fong arwin.fong@mail.utoronto.ca
-FirstName LastName <email@domain.example>
+Eric Fan ericcw.fan@mail.utoronto.ca
 
 ---- PRELIMINARIES ----
 
@@ -126,6 +126,14 @@ the current_thread's child_list and return its exit status.
 >> fails, so it cannot return before the new executable has completed
 >> loading.  How does your code ensure this?  How is the load
 >> success/failure status passed back to the thread that calls "exec"?
+
+The "exec" system call acquires the lock "load_lock" when it has to 
+load a new executable, before releasing it after the load is finished,
+regardless of success or failure. 
+
+"exec" saves the result of the load as "pid", which is used as the 
+return value when "exec" terminates, passing TID_ERROR if it was a 
+failure or the new tid_t value if it was a success.
 
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
