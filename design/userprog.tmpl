@@ -29,19 +29,86 @@ Eric Fan ericcw.fan@mail.utoronto.ca
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+/* An autoincremented unique number for each fd */
+static int fd_num = 1;           
+/* List of all open files */
+struct list all_files;
+/* Locks for synchronization */
+struct lock call_lock;
+struct lock load_lock;
+
+/* Structure for child processes of a thread
+struct child_process
+{
+   tid_t tid;
+   int exit_status;                    /* Exit status of child process */     
+   bool has_exited;                    /* Has child exited */
+   bool first_load;                    /* First load of child process */
+   struct list_elem child_elem;        /* List element for child list */
+   struct semaphore waiting;           /* Semaphore for waiting */
+}
+
+/* Files that are currently open */
+struct sys_file {
+    int fd;
+    tid_t fd_owner;
+    struct file *file;
+    struct list_elem file_elem;
+};
+
+struct thread
+{
+    /* Same attributes */
+
+    // New additions
+    #ifdef USERPROG
+    /* Owned by userprog/process.c. */
+    uint32_t *pagedir;                  /* Page directory. */
+    struct thread *parent;              /* Parent thread */
+    struct list child_list;             /* List of child threads */
+    #endif
+}
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe how you implemented argument parsing.  How do
 >> you arrange for the elements of argv[] to be in the right order?
 >> How do you avoid overflowing the stack page?
 
+After load(file_name), file_name is tokenized with strtok_r to create an
+array of strings, which is then passed into setup_stack. Using a for loop,
+the arguments are pushed into the stack from argv[argc - 1] to arg[0].
+After each push, the stack pointer to the start of that argument string is 
+recorded in an array.
+
+After pushing all the arguments, word aligning, and pushing a null 
+sentinel, the stack pointers are pushed onto the stack in the same
+manner as the arguments, making sure that the arguments correspond
+to their stack pointers.
+
+pagedir_get_page is called on the current thread's pagedir and the
+end of the cmd_line string to check if cmd_line exceeds the page
+bound. If it does, exit(1) is called 
+
 ---- RATIONALE ----
 
 >> A3: Why does Pintos implement strtok_r() but not strtok()?
 
+If a context switch happens, strtok() is unable to resume its process,
+making it prone to errors on an OS level. strtok_r() is a reentrant 
+version of strtok(), meaning its progress resumes where it's left off
+and is resumed, making it thread safe to use.
+
 >> A4: In Pintos, the kernel separates commands into a executable name
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
+
+Using the shell to parse the commands allows many shell interpreters to
+be used without changing the kernel for each command, making it more
+flexible to use.
+
+The shell is also more user-friendly since it allows for feature such
+as command history, making it easier to operate.
 
                  SYSTEM CALLS
                  ============
@@ -56,10 +123,11 @@ Eric Fan ericcw.fan@mail.utoronto.ca
 static int fd_num = 1;           
 /* List of all open files */
 struct list all_files;
-/* Lock for synch */
+/* Locks for synchronization */
 struct lock call_lock;
 struct lock load_lock;
 
+/* Structure for child processes of a thread
 struct child_process
 {
    tid_t tid;
@@ -70,6 +138,7 @@ struct child_process
    struct semaphore waiting;           /* Semaphore for waiting */
 }
 
+/* Files that are currently open */
 struct sys_file {
     int fd;
     tid_t fd_owner;
