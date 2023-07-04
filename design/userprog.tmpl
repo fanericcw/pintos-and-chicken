@@ -192,6 +192,17 @@ file_write() function.
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
+The greatest amount of inspections would be 4096 calls to pagedir_get_page()
+which means each system call would be inspecting a single byte. On the
+opposite spectrum, the least amount of inspections would be 1 if a 
+system call inspects all 4096 bytes at once.
+
+For a system call that only copies 2 bytes of data, the greatest would be
+2 inspections while the least amount of inspections would be 1.
+
+A way to improve these numbers is to limit the amount of empty chunks
+in a page. The amount it improves depends on how much empty space there is
+that can be reduced.
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
@@ -225,7 +236,13 @@ Before we access the user program memory, we validate the address
 using is_user_vaddr() and pagedir_get_page(). If any of these conditions
 failed we want to terminate the process with exit(-1). 
 
-For example when a "read" system call happens, we first validate...
+For the system call "write", we first check if the arguments are valid.
+If the arguments are not in the user address or in the page directory,
+the program exits. After the arguments have been checked, the program
+executes the system call. If there is an error, exit(-1) will be called
+which will terminate the process and free all of its resources including
+the child processes that have been exited.
+
 ---- SYNCHRONIZATION ----
 
 >> B7: The "exec" system call returns -1 if loading the new executable
