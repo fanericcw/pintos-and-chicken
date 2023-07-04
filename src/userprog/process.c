@@ -142,10 +142,14 @@ process_exit (int status)
 
   struct list *child_list = &cur->parent->child_list;
   struct child_process *child_process;
-  struct list_elem *e = list_front(child_list);
+  struct list_elem *e;
+  struct list *cur_list = &cur->child_list;
+  struct list_elem *cur_e;
+  struct child_process *cur_child;
   
   if (list_empty(child_list))
     return;
+  e = list_front(child_list);
   while(e != list_end(child_list))
   {
     child_process = list_entry(e, struct child_process, child_elem);
@@ -159,6 +163,22 @@ process_exit (int status)
   child_process->has_exited = true;
   child_process->exit_status = status;
   sema_up(&child_process->waiting);
+
+  if (!cur_list)
+  {
+    cur_e = list_front(cur_list);
+    // Free the children
+    while (cur_e != list_end(cur_list))
+    {
+      cur_child = list_entry(cur_e, struct child_process, child_elem);
+      if (cur_child->has_exited)
+      {
+        list_remove(&cur_child->child_elem);
+        free(cur_child);
+      }
+      cur_e = list_next(cur_e);
+    }
+  }
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;

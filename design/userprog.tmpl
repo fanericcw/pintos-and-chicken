@@ -225,7 +225,7 @@ Before we access the user program memory, we validate the address
 using is_user_vaddr() and pagedir_get_page(). If any of these conditions
 failed we want to terminate the process with exit(-1). 
 
-For example when a "read" system call happens, we first validate 
+For example when a "read" system call happens, we first validate...
 ---- SYNCHRONIZATION ----
 
 >> B7: The "exec" system call returns -1 if loading the new executable
@@ -248,11 +248,34 @@ failure or the new tid_t value if it was a success.
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
 
+P calls wait(C) before C exits:
+When P calls wait(C) before C exits, we first check if we have already 
+waited for the child C by the bool first_load. If it is not the first_load,
+return -1 else we check if C has exited. Since this example is talking
+about when wait is called before C exits, therefore we need to sema down
+our waiting semaphore.
+
+P calls wait(C) after C exits:
+Similar to the first case, we need to check for first_load. This case deals
+with when there is a wait call to C after C exits so we must remove C from
+the parent's child list and return the exit status of C.
+
+P terminates without waiting before C exits:
+When P terminates without waiting and C has not exited yet, P will free
+all of its resources except for the children C that have not exited.
+C will later call exit on itself.
+
+P terminates without waiting after C exits:
+Once C has exited, P will just free all of the children that are held in
+their children_process list.
+
 ---- RATIONALE ----
 
 >> B9: Why did you choose to implement access to user memory from the
 >> kernel in the way that you did?
-
+To access user memory from the kernel we used a helper function called
+copy_in which uses get_user to copy the address from the stack_pointer
+and save it to another access that the program can access easily.
 
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
