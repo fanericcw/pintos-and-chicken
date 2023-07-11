@@ -111,6 +111,7 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     struct thread *parent;              /* Parent thread */
     struct list child_list;             /* List of child threads */
+    struct file *exec_file;             /* Executable file */
 #endif
 
     /* Owned by thread.c. */

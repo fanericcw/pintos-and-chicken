@@ -147,6 +147,7 @@ process_exit (int status)
   struct list_elem *cur_e;
   struct child_process *cur_child;
   
+  file_close(cur->exec_file);
   if (list_empty(child_list))
     return;
   e = list_front(child_list);
@@ -316,6 +317,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+  t->exec_file = file;
+  file_deny_write(file);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -410,7 +413,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  // file_close (file);
   return success;
 }
 
