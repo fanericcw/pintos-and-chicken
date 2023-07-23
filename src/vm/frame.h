@@ -12,10 +12,12 @@ struct frame
 };  
 
 struct list frame_table;
+struct list_elem *clk_hand_ptr;
 
 void frame_init (void);
 void *allocate_frame (enum palloc_flags flags);
 void add_frame (void *user_virt_addr);
 void free_frame (void *user_virt_addr);
+void *evict_frame (void);
 
 #endif /* vm/frame.h */

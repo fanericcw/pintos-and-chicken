@@ -3,11 +3,13 @@
 #include "lib/kernel/list.h"
 #include "threads/malloc.h"
 #include "vm/frame.h"
+#include "vm/swap.h"
 
 void 
 frame_init (void)
 {
     list_init (&frame_table);
+    clk_hand_ptr = NULL;
 }
 
 void *
@@ -16,7 +18,15 @@ allocate_frame (enum palloc_flags flags)
     void *user_virt_addr = palloc_get_page (flags);
     if (user_virt_addr == NULL)
         return NULL;       
-    add_frame (user_virt_addr);
+
+    if (user_virt_addr != NULL)
+        add_frame (user_virt_addr);
+    else
+    {
+        user_virt_addr = evict_frame ();
+        add_frame (user_virt_addr);
+    }
+
     return user_virt_addr;
 }
 
@@ -47,3 +57,37 @@ free_frame (void *user_virt_addr)
     }
 }
 
+void *
+evict_frame (void)
+{
+    struct frame *f;
+
+    if (clk_hand_ptr == NULL || clk_hand_ptr == list_end (&frame_table))
+        clk_hand_ptr = list_begin (&frame_table);
+    else
+        clk_hand_ptr = list_next (clk_hand_ptr);
+
+    while (true)
+    {
+        if (clk_hand_ptr == list_end (&frame_table))
+            clk_hand_ptr = list_begin (&frame_table);
+        f = list_entry (clk_hand_ptr, struct frame, frame_elem);
+        if (pagedir_is_accessed (f->thread->pagedir, f->user_virt_addr))
+            pagedir_set_accessed (f->thread->pagedir, f->user_virt_addr, false);
+        else
+        {
+            if (pagedir_is_dirty (f->thread->pagedir, f->user_virt_addr))
+            {
+                uint32_t swap_index = swap_out (f->user_virt_addr);
+                pagedir_clear_page (f->thread->pagedir, f->user_virt_addr);
+                pagedir_set_dirty (f->thread->pagedir, f->user_virt_addr, false);
+                return swap_index;
+            }
+            else
+            {
+                pagedir_clear_page (f->thread->pagedir, f->user_virt_addr);
+                return f->user_virt_addr;
+            }
+        }
+    }
+}
