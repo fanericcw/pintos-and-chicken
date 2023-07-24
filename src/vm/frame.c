@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include "lib/kernel/list.h"
 #include "threads/malloc.h"
+#include "threads/palloc.h"
+#include "userprog/pagedir.h"
 #include "vm/frame.h"
 #include "vm/swap.h"
 
@@ -13,28 +15,29 @@ frame_init (void)
 }
 
 void *
-allocate_frame (enum palloc_flags flags)
+allocate_frame (enum palloc_flags flags, void *user_virt_addr)
 {
-    void *user_virt_addr = palloc_get_page (flags);
-    if (user_virt_addr == NULL)
+    void *kernel_virt_addr = palloc_get_page (flags);
+    if (kernel_virt_addr == NULL)
         return NULL;       
 
-    if (user_virt_addr != NULL)
-        add_frame (user_virt_addr);
+    if (kernel_virt_addr != NULL)
+        add_frame (kernel_virt_addr, user_virt_addr);
     else
     {
-        user_virt_addr = evict_frame ();
-        add_frame (user_virt_addr);
+        kernel_virt_addr = evict_frame ();
+        add_frame (kernel_virt_addr, user_virt_addr);
     }
 
-    return user_virt_addr;
+    return kernel_virt_addr;
 }
 
 void
-add_frame (void *user_virt_addr)
+add_frame (void *kernel_virt_addr, void *user_virt_addr)
 {
     struct frame *f = malloc(sizeof(struct frame));
     f->thread = thread_current ();
+    f->kernel_virt_addr = kernel_virt_addr;
     f->user_virt_addr = user_virt_addr;
     list_push_back (&frame_table, &(f->frame_elem));
 }
