@@ -5,6 +5,7 @@
 #include <list.h>
 #include "threads/synch.h"
 #include <stdint.h>
+#include "vm/page.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -106,14 +107,18 @@ struct thread
     int nice;                           /* Nice value of thread */
     int recent_cpu;                     /* Recent CPU value of thread */
    
-#ifdef USERPROG
-    /* Owned by userprog/process.c. */
-    uint32_t *pagedir;                  /* Page directory. */
-    struct thread *parent;              /* Parent thread */
-    struct list child_list;             /* List of child threads */
-    struct file *exec_file;             /* Executable file */
-#endif
+   #ifdef USERPROG
+      /* Owned by userprog/process.c. */
+      uint32_t *pagedir;                  /* Page directory. */
+      struct thread *parent;              /* Parent thread */
+      struct list child_list;             /* List of child threads */
+      struct file *exec_file;             /* Executable file */
+   #endif
 
+   #ifdef VM
+      struct list spt;                    /* Supplemental page table */
+   #endif
+      
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

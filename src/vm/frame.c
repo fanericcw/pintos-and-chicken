@@ -43,17 +43,17 @@ add_frame (void *kernel_virt_addr, void *user_virt_addr)
 }
 
 void 
-free_frame (void *user_virt_addr)
+free_frame (void *kernel_virt_addr)
 {
     struct frame *f;
     struct list_elem *e;
     for (e = list_begin (&frame_table); e != list_end (&frame_table); e = list_next (e))
     {
         f = list_entry (e, struct frame, frame_elem);
-        if (f->user_virt_addr == user_virt_addr)
+        if (f->kernel_virt_addr == kernel_virt_addr)
         {
             list_remove (e);
-            palloc_free_page (f->user_virt_addr);
+            palloc_free_page (f->kernel_virt_addr);
             free (f);
             break;
         }

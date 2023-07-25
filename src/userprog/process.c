@@ -19,6 +19,7 @@
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
 #include "vm/frame.h"
+#include "vm/page.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -140,6 +141,7 @@ process_exit (int status)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  struct list *spt;
 
   struct list *child_list = &cur->parent->child_list;
   struct child_process *child_process;
@@ -181,6 +183,12 @@ process_exit (int status)
       cur_e = list_next(cur_e);
     }
   }
+
+  #ifdef VM
+  // Destroy the SPTE.
+  spt_destroy(&cur->spt);
+  #endif
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -300,6 +308,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
+  list_init(&t->spt);
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
@@ -584,7 +593,7 @@ setup_stack (void **esp, const char **argv, int argc)
         // hex_dump((uintptr_t)PHYS_BASE - 64, *esp, 64, true);
       }
       else
-        palloc_free_page (kpage);
+        free_frame (kpage);
     }
   return success;
 }
@@ -605,6 +614,7 @@ install_page (void *upage, void *kpage, bool writable)
 
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
-  return (pagedir_get_page (t->pagedir, upage) == NULL
-          && pagedir_set_page (t->pagedir, upage, kpage, writable));
+  return pagedir_get_page (t->pagedir, upage) == NULL && 
+        pagedir_set_page (t->pagedir, upage, kpage, writable) &&
+        spte_set_page (&t->spt, upage);
 }
