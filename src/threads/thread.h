@@ -118,6 +118,7 @@ struct thread
    #ifdef VM
       void *esp;                           
       struct list spt;                    /* Supplemental page table */
+      struct list mmap_list;              /* Memory map list */
    #endif
       
     /* Owned by thread.c. */

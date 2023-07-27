@@ -514,10 +514,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          free_frame (kpage);
-          return false; 
-        }
+      {
+        free_frame (kpage);
+        return false; 
+      }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
       /* Add the page to the process's address space. */
@@ -615,6 +615,6 @@ install_page (void *upage, void *kpage, bool writable)
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
   return pagedir_get_page (t->pagedir, upage) == NULL && 
-        pagedir_set_page (t->pagedir, upage, kpage, writable) &&
+        pagedir_set_page (t->pagedir, upage, kpage, writable); // &&
         spte_set_page (&t->spt, upage);
 }

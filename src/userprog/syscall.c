@@ -1,7 +1,6 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include "devices/shutdown.h"
-#include "process.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "threads/vaddr.h"
@@ -9,11 +8,19 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "lib/kernel/list.h"
+#include "userprog/process.h"
 #include "pagedir.h"
+#include "threads/malloc.h"
+#include "vm/page.h"
 
 static void syscall_handler (struct intr_frame *);
 static int get_user (const uint8_t *uaddr);
 static bool put_user (uint8_t *udst, uint8_t byte);
+
+#ifdef VM
+mapid_t mmap(int fd, void *addr);
+static struct mmap_details* find_mmap_desc(struct thread *, mapid_t fd);
+#endif
 
  /* An autoincremented unique number for each fd */
 static int fd_num = 1;           
@@ -80,7 +87,7 @@ get_sys_file(int fd)
 
   struct sys_file *temp;
   struct list_elem *e = list_front(&all_files);
-  /* Find corresponding file_elem in list*/
+  /* Find corresponding file_elem in list */
   while (1)
   {
     temp = list_entry(e, struct sys_file, file_elem);
@@ -290,6 +297,106 @@ close (int fd)
   list_remove(&sys_file->file_elem);
 }
 
+// #ifdef VM
+mapid_t mmap_sys(int fd, void *upage) {
+  struct thread *cur = thread_current();
+  // check upage validity and page alignment
+  if (upage == NULL || upage == 0 || pg_ofs(upage) != 0)
+    return -1;
+  // Unmappable fd
+  if (fd <= 1)
+    return -1;
+
+  /* Open file */
+  struct file *f = NULL;
+  struct file *f_ = get_sys_file(fd)->file;
+  if(f_) {
+    f = file_reopen (f_);
+  }
+  // File does not exist
+  if(f == NULL)
+    goto FAIL_MAP;
+
+  size_t file_size = file_length(f);
+  // File size is 0
+  if(file_size == 0)
+    goto FAIL_MAP;
+
+  /* Mapping */
+  // All page addresses should be non-existent.
+  size_t offset;
+  for (offset = 0; offset < file_size; offset += PGSIZE) {
+    void *addr = upage + offset;
+    struct list *table = &cur->spt;
+    if (page_lookup(addr) != NULL)
+      goto FAIL_MAP;
+  }
+
+  // Map each page to filesystem
+  for (offset = 0; offset < file_size; offset += PGSIZE) {
+    void *addr = upage + offset;
+
+    size_t read_bytes = (offset + PGSIZE < file_size ? PGSIZE : file_size - offset);
+    size_t zero_bytes = PGSIZE - read_bytes;
+
+    bool set_page_success = spte_set_page(&cur->spt, addr);
+    if (set_page_success) {
+      struct spte *entry = page_lookup(addr);
+      entry->user_virt_addr = upage;
+      entry->state = FILE;
+      entry->dirty = false;
+      entry->file = f;
+      entry->file_offset = offset;
+      entry->read_bytes = read_bytes;
+      entry->zero_bytes = zero_bytes;
+      entry->writable = true;
+    }
+  }
+
+  /* 3. Assign mmapid */
+  mapid_t map_id;
+  if (!list_empty(&cur->mmap_list)) {
+    map_id = list_entry(list_back(&cur->mmap_list), struct mmap_details, elem)->id + 1;
+  }
+  else map_id = 1;
+
+  struct mmap_details *mmap_d = (struct mmap_details*) malloc(sizeof(struct mmap_details));
+  mmap_d->id = map_id;
+  mmap_d->file = f;
+  mmap_d->addr = upage;
+  mmap_d->size = file_size;
+  list_push_back (&cur->mmap_list, &mmap_d->elem);
+
+  return map_id;
+
+
+  FAIL_MAP:
+    // finally: release and return
+    return -1;
+}
+
+static struct mmap_details*
+find_mmap_details(struct thread *t, mapid_t map_id)
+{
+  ASSERT (t != NULL);
+
+  struct list_elem *e;
+
+  if (! list_empty(&t->mmap_list)) {
+    for (e = list_begin(&t->mmap_list);
+        e != list_end(&t->mmap_list); e = list_next(e))
+    {
+      struct mmap_details *det = list_entry(e, struct mmap_details, elem);
+      if(det->id == map_id) {
+        return det;
+      }
+    }
+  }
+
+  return NULL; // not found
+}
+// #endif
+
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
@@ -356,8 +463,20 @@ syscall_handler (struct intr_frame *f UNUSED)
       copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
       close((int)args[0]);
       break;
+    #ifdef VM
+    case SYS_MMAP:
+      copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
+
+      int fd = (int)args[0];
+      void *addr = pg_round_down(args[1]);
+
+      mapid_t mmap_status = mmap_sys(fd, addr);
+      f->eax = mmap_status;
+      break;    
+    #endif
     default:
       exit(-1);
       break;
   }
 }
+

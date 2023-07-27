@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
 #include "vm/page.h"
 #include "threads/malloc.h"
 #include "lib/kernel/list.h"
@@ -7,6 +9,7 @@
 #include "vm/frame.h"
 #include "userprog/pagedir.h"
 #include "threads/vaddr.h"
+#include "filesys/file.h"
 
 // Destroys entire SPT for a thread
 void spt_destroy (struct list *spt) {
@@ -93,15 +96,29 @@ load_page (struct list *spt, uint32_t pd, void *user_virt_addr)
   switch (spte->state)
   {
     case ZERO:
-        memset (kpage, 0, PGSIZE);
-        break;
+      memset (kpage, 0, PGSIZE);
+      break;
     case FRAME:
-        /* Do nothing */
-        break;
+      /* Do nothing */
+      break;
     case SWAP:
-        PANIC("Swapping not yet implemente");
-        break;
-    
+      PANIC("Swapping not yet implemente");
+      break;
+    case FILE:
+      ;bool success = true;
+      file_seek(spte->file, spte->file_offset);
+      off_t size_read = file_read(spte->file, kpage, spte->read_bytes);
+      if (size_read != spte->read_bytes)
+        success = false;
+      
+      if (success == false) {
+        /* Set remaining bytes in page to 0 */
+        ASSERT (spte->read_bytes + spte->zero_bytes == PGSIZE);
+        memset (kpage + size_read, 0, spte->zero_bytes);
+        free_frame(kpage);
+        return false;
+      }
+      break;
     default:
         break;
   }
@@ -111,5 +128,10 @@ load_page (struct list *spt, uint32_t pd, void *user_virt_addr)
       free_frame (kpage);
       return false;
   }
+
+  spte->state = FRAME;
+
+  // pagedir_set_dirty (thread_current()->pagedir, kpage, false);
+
   return true;
 } 
