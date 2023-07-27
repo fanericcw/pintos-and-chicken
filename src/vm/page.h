@@ -34,6 +34,6 @@ void spt_destroy (struct list *);
 bool spte_set_page (struct list *, void *);
 struct spte *page_lookup(void *);
 bool vaddr_is_valid(void *);
-bool load_page (struct list *, uint32_t, void *);
+bool load_page (struct list *, uint32_t *, void *);
 
 #endif /* vm/page.h */

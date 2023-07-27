@@ -164,7 +164,7 @@ page_fault (struct intr_frame *f)
   void* esp = user ? f->esp : cur->esp;
 
   // Stack Growth
-  bool stack_frame_valid = (esp <= fault_addr || fault_addr == f->esp - 4 || fault_addr == f->esp - 32);
+  bool stack_frame_valid = (esp <= fault_addr || fault_addr >= f->esp - 32);
   bool stack_addr_valid = (PHYS_BASE - MAX_STACK <= fault_addr && fault_addr < PHYS_BASE);
   if (stack_frame_valid && stack_addr_valid) 
   {
@@ -174,7 +174,7 @@ page_fault (struct intr_frame *f)
 		spte->state = ZERO;
   }
 
-  if(load_page (&cur->spt, *cur->pagedir, fault_page))
+  if(load_page (&cur->spt, cur->pagedir, fault_page))
 		// Success
 		return;
   else

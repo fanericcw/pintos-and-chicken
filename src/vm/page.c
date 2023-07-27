@@ -78,7 +78,7 @@ bool vaddr_is_valid(void * vaddr)
 }
 
 bool 
-load_page (struct list *spt, uint32_t pd, void *user_virt_addr)
+load_page (struct list *spt, uint32_t *pd, void *user_virt_addr)
 {   
   // Not valid user vaddr
   if (!vaddr_is_valid (user_virt_addr))
@@ -123,7 +123,7 @@ load_page (struct list *spt, uint32_t pd, void *user_virt_addr)
         break;
   }
 
-  if(!pagedir_set_page (thread_current()->pagedir, user_virt_addr, kpage, true)) 
+  if(!pagedir_set_page (pd, user_virt_addr, kpage, true)) 
   {
       free_frame (kpage);
       return false;
@@ -131,7 +131,7 @@ load_page (struct list *spt, uint32_t pd, void *user_virt_addr)
 
   spte->state = FRAME;
 
-  // pagedir_set_dirty (thread_current()->pagedir, kpage, false);
+  pagedir_set_dirty (pd, kpage, false);
 
   return true;
 } 

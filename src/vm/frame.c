@@ -92,5 +92,6 @@ evict_frame (void)
                 return f->user_virt_addr;
             }
         }
+        clk_hand_ptr = list_next (&frame_table);
     }
 }

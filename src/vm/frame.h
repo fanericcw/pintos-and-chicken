@@ -12,7 +12,9 @@ struct frame
     struct list_elem frame_elem;
 };  
 
+/* List of all frames */
 struct list frame_table;
+/* Pointer for LRU */
 struct list_elem *clk_hand_ptr;
 
 void frame_init (void);

@@ -8,8 +8,7 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Arwin Fong arwin.fong@mail.utoronto.ca
 FirstName LastName <email@domain.example>
 
 ---- PRELIMINARIES ----
@@ -58,10 +57,31 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+struct frame 
+{
+    struct thread *thread;
+    void *user_virt_addr;
+    void *kernel_virt_addr;
+    struct list_elem frame_elem;
+};  
+
+/* List of all frames */
+struct list frame_table;
+
+/* Pointer for LRU */
+struct list_elem *clk_hand_ptr;
+
 ---- ALGORITHMS ----
 
 >> B2: When a frame is required but none is free, some frame must be
 >> evicted.  Describe your code for choosing a frame to evict.
+
+To evict a frame, we used the LRU method to determine which frames to evict.
+A doubly linked list and a "clock hand" pointer was used for the clock 
+page replacement algorithm implementation. When we call evict_frame()
+We initialize the clock hand (CH) to be the beginning of the list if the
+CH is null or the end of the list else we move the hand to the next element.
+
 
 >> B3: When a process P obtains a frame that was previously used by a
 >> process Q, how do you adjust the page table (and any other data
@@ -70,6 +90,13 @@ FirstName LastName <email@domain.example>
 >> B4: Explain your heuristic for deciding whether a page fault for an
 >> invalid virtual address should cause the stack to be extended into
 >> the page that faulted.
+
+To decide if a virtual address is invalid or not we check if the 
+fault address is within 32 bytes below the current user stack and
+if the fault address is greater equal to the stack pointer. Another 
+check we do to decide whether a page fault should cause the stack
+to extend is the fault address > PHYS_BASE and if the fault address
+is over the 8MB stack limit pintos gives us. 
 
 ---- SYNCHRONIZATION ----
 

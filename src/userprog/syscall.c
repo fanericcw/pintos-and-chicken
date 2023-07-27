@@ -298,7 +298,8 @@ close (int fd)
 }
 
 // #ifdef VM
-mapid_t mmap_sys(int fd, void *upage) {
+mapid_t mmap(int fd, void *upage) 
+{
   struct thread *cur = thread_current();
   // check upage validity and page alignment
   if (upage == NULL || upage == 0 || pg_ofs(upage) != 0)
@@ -326,9 +327,9 @@ mapid_t mmap_sys(int fd, void *upage) {
   // All page addresses should be non-existent.
   size_t offset;
   for (offset = 0; offset < file_size; offset += PGSIZE) {
-    void *addr = upage + offset;
-    struct list *table = &cur->spt;
-    if (page_lookup(addr) != NULL)
+    if (page_lookup(upage + offset) != NULL)
+      goto FAIL_MAP;
+    if (pagedir_get_page(cur->pagedir, upage + offset) != NULL)
       goto FAIL_MAP;
   }
 
@@ -396,6 +397,42 @@ find_mmap_details(struct thread *t, mapid_t map_id)
   return NULL; // not found
 }
 // #endif
+
+void
+munmap (mapid_t mapping)
+{
+  struct thread *cur = thread_current ();
+  struct mmap_details *det = find_mmap_details(cur, mapping);
+  struct list_elem *e;
+  if (mapping <= 0 || det == NULL)
+    return;
+
+  // Unmap each page
+  if (!list_empty(&cur->mmap_list))
+  {
+    for (e = list_begin(&cur->mmap_list);
+        e != list_end(&cur->mmap_list); e = list_next(e))
+    {
+      struct mmap_details *det = list_entry(e, struct mmap_details, elem);
+      size_t offset;
+      for (offset = 0; offset < det->size; offset += PGSIZE) {
+        void *addr = det->addr + offset;
+        struct spte *entry = page_lookup(addr);
+        if (entry != NULL) {
+          if (pagedir_is_dirty(cur->pagedir, addr)) {
+            file_write_at(entry->file, addr, entry->read_bytes, entry->file_offset);
+          }
+          spte_set_page(&cur->spt, addr);
+          pagedir_clear_page(cur->pagedir, addr);
+        }
+      }
+      file_close(det->file);
+      list_remove(&det->elem);
+      free(det);
+    }
+  }
+  free(det);
+}
 
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
@@ -470,9 +507,12 @@ syscall_handler (struct intr_frame *f UNUSED)
       int fd = (int)args[0];
       void *addr = pg_round_down(args[1]);
 
-      mapid_t mmap_status = mmap_sys(fd, addr);
+      mapid_t mmap_status = mmap (fd, addr);
       f->eax = mmap_status;
-      break;    
+      break;
+    case SYS_MUNMAP:
+      copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
+      munmap ((mapid_t)args[0]);    
     #endif
     default:
       exit(-1);
