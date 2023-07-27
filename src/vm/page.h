@@ -9,6 +9,9 @@
 #define FRAME 1
 #define SWAP 2
 
+/* Max Stack size */
+#define MAX_STACK 8 * 1024 * 1024
+
 struct spte
 {
     void *user_virt_addr;
@@ -18,5 +21,8 @@ struct spte
 
 void spt_destroy (struct list *);
 bool spte_set_page (struct list *, void *);
+struct spte *page_lookup(void *);
+bool vaddr_is_valid(void *);
+bool load_page (struct list *, uint32_t, void *);
 
 #endif /* vm/page.h */

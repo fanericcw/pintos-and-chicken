@@ -299,9 +299,10 @@ syscall_handler (struct intr_frame *f UNUSED)
   unsigned syscall_number;
   int args[3];
 
+  thread_current()->esp = f->esp;
+
   // Extracting syscall number
   copy_in (&syscall_number, f->esp, sizeof (syscall_number));
-
   switch (syscall_number)
   {
     case SYS_HALT:

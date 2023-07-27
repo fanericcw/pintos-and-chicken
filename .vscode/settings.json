@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "pagedir.h": "c",
+        "thread.h": "c",
+        "vaddr.h": "c"
+    }
+}

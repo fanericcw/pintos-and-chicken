@@ -116,6 +116,7 @@ struct thread
    #endif
 
    #ifdef VM
+      void *esp;                           
       struct list spt;                    /* Supplemental page table */
    #endif
       
