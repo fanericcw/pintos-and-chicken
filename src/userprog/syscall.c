@@ -300,80 +300,70 @@ close (int fd)
 // #ifdef VM
 mapid_t mmap(int fd, void *upage) 
 {
-  struct thread *cur = thread_current();
-  // check upage validity and page alignment
-  if (upage == NULL || upage == 0 || pg_ofs(upage) != 0)
+  // Check upage validity
+  if (upage == NULL || pg_ofs(upage) != 0) 
     return -1;
-  // Unmappable fd
+  // fd 0 and 1 shouldn't be mapped
   if (fd <= 1)
     return -1;
+  struct thread *cur = thread_current();
 
-  /* Open file */
+  /* 1. Open file */
   struct file *f = NULL;
-  struct file *f_ = get_sys_file(fd)->file;
-  if(f_) {
-    f = file_reopen (f_);
+  struct sys_file *sys_file = get_sys_file(fd);
+  if (sys_file && sys_file->file) {
+    f = file_reopen (sys_file->file);
   }
-  // File does not exist
-  if(f == NULL)
-    goto FAIL_MAP;
+  if (f == NULL)
+    return -1;
 
+  // Check file size
   size_t file_size = file_length(f);
-  // File size is 0
-  if(file_size == 0)
-    goto FAIL_MAP;
-
-  /* Mapping */
-  // All page addresses should be non-existent.
-  size_t offset;
-  for (offset = 0; offset < file_size; offset += PGSIZE) {
-    if (page_lookup(upage + offset) != NULL)
-      goto FAIL_MAP;
-    if (pagedir_get_page(cur->pagedir, upage + offset) != NULL)
-      goto FAIL_MAP;
+  if (file_size == 0)
+    return -1;
+  uint32_t offset;
+  for (offset = 0; offset < file_size; offset += PGSIZE)
+  {
+    void *addr = upage + offset;
+    if (page_lookup(upage) != NULL)
+      return -1;
   }
 
-  // Map each page to filesystem
-  for (offset = 0; offset < file_size; offset += PGSIZE) {
+  // Map pages to filesys
+  for (offset = 0; offset < file_size; offset += PGSIZE) 
+  {
     void *addr = upage + offset;
 
     size_t read_bytes = (offset + PGSIZE < file_size ? PGSIZE : file_size - offset);
     size_t zero_bytes = PGSIZE - read_bytes;
 
-    bool set_page_success = spte_set_page(&cur->spt, addr);
-    if (set_page_success) {
-      struct spte *entry = page_lookup(addr);
-      entry->user_virt_addr = upage;
-      entry->state = FILE;
-      entry->dirty = false;
-      entry->file = f;
-      entry->file_offset = offset;
-      entry->read_bytes = read_bytes;
-      entry->zero_bytes = zero_bytes;
-      entry->writable = true;
-    }
+    if (!spte_set_page(&cur->spt, addr))
+      return -1;
+    struct spte *spte = page_lookup(addr);
+    spte->user_virt_addr = upage;
+    spte->state = FILE;
+    spte->dirty = false;
+    spte->file = f;
+    spte->file_offset = offset;
+    spte->read_bytes = read_bytes;
+    spte->zero_bytes = zero_bytes;
+    spte->writable = true;
   }
 
-  /* 3. Assign mmapid */
   mapid_t map_id;
-  if (!list_empty(&cur->mmap_list)) {
+  if (! list_empty(&cur->mmap_list)) {
     map_id = list_entry(list_back(&cur->mmap_list), struct mmap_details, elem)->id + 1;
   }
   else map_id = 1;
 
-  struct mmap_details *mmap_d = (struct mmap_details*) malloc(sizeof(struct mmap_details));
-  mmap_d->id = map_id;
-  mmap_d->file = f;
-  mmap_d->addr = upage;
-  mmap_d->size = file_size;
-  list_push_back (&cur->mmap_list, &mmap_d->elem);
+  struct mmap_details *mmap_det = (struct mmap_details*) malloc(sizeof(struct mmap_details));
+  mmap_det->id = map_id;
+  mmap_det->file = f;
+  mmap_det->addr = upage;
+  mmap_det->size = file_size;
+  list_push_back (&cur->mmap_list, &mmap_det->elem);
 
   return map_id;
-
-
-  FAIL_MAP:
-    // finally: release and return
-    return -1;
 }
 
 static struct mmap_details*
@@ -503,12 +493,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     #ifdef VM
     case SYS_MMAP:
       copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
-
-      int fd = (int)args[0];
-      void *addr = pg_round_down(args[1]);
-
-      mapid_t mmap_status = mmap (fd, addr);
-      f->eax = mmap_status;
+      f->eax = mmap((int)args[0], (void*)args[1]);
       break;
     case SYS_MUNMAP:
       copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));

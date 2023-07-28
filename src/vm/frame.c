@@ -19,8 +19,8 @@ allocate_frame (enum palloc_flags flags, void *user_virt_addr)
 {
     void *kernel_virt_addr = palloc_get_page (flags);
     if (kernel_virt_addr == NULL)
-        return NULL;       
-
+        return NULL;  
+             
     if (kernel_virt_addr != NULL)
         add_frame (kernel_virt_addr, user_virt_addr);
     else
@@ -28,7 +28,6 @@ allocate_frame (enum palloc_flags flags, void *user_virt_addr)
         kernel_virt_addr = evict_frame ();
         add_frame (kernel_virt_addr, user_virt_addr);
     }
-
     return kernel_virt_addr;
 }
 
@@ -75,6 +74,11 @@ evict_frame (void)
         if (clk_hand_ptr == list_end (&frame_table))
             clk_hand_ptr = list_begin (&frame_table);
         f = list_entry (clk_hand_ptr, struct frame, frame_elem);
+
+        /* If pinned, pass over */
+        if (page_lookup_kpage(f->kernel_virt_addr)->pinned) {
+            continue;
+        }
         if (pagedir_is_accessed (f->thread->pagedir, f->user_virt_addr))
             pagedir_set_accessed (f->thread->pagedir, f->user_virt_addr, false);
         else

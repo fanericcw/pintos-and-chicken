@@ -9,7 +9,7 @@
 >> Fill in the names and email addresses of your group members.
 
 Arwin Fong arwin.fong@mail.utoronto.ca
-FirstName LastName <email@domain.example>
+Eric Fan ericcw.fan@mail.utoronto.ca
 
 ---- PRELIMINARIES ----
 
@@ -29,24 +29,80 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+struct spte
+{
+    void *user_virt_addr;
+    uint8_t state;
+    struct list_elem elem;
+
+    bool dirty;
+    bool accessed;
+    
+    struct file *file;
+    off_t file_offset;
+    int32_t read_bytes;
+    int32_t zero_bytes;
+    bool writable;
+};
+
+struct thread
+{
+    ...
+    struct list child_list;             /* List of child threads */
+    struct file *exec_file;             /* Executable file */
+#endif
+
+// New content starts here
+
+#ifdef VM
+    void *esp;                           
+    struct list spt;                    /* Supplemental page table */
+    struct list mmap_list;              /* Memory map list */
+#endif
+
+// New content ends
+    
+    /* Owned by thread.c. */
+    unsigned magic;                     /* Detects stack overflow. */
+};
+
 ---- ALGORITHMS ----
 
 >> A2: In a few paragraphs, describe your code for accessing the data
 >> stored in the SPT about a given page.
 
+To access data stored in the SPT, we first used page_lookup() to find
+the page needed using the user virtual address. This works by iterating
+through the list, comparing each entry to the given user vaddr, and 
+returning the entry if it is found, NULL otherwise
+
+Once the entry has been obtained, the data stored inside can be accessed
+via entry->[field]
+
 >> A3: How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame, or
 >> alternatively how do you avoid the issue?
+
+By using pagedir from the thread, we are using the user virtual address
+in operations that involve accessed and/or dirty bits. This ensures that
+the operation uses the bits as a entry in user space.
 
 ---- SYNCHRONIZATION ----
 
 >> A4: When two user processes both need a new frame at the same time,
 >> how are races avoided?
 
+When a user process tries to get a new frame,  it acquires a lock. After
+switching to the other process during acquistion, the other process
+sees that the lock is held by some other process, and has to wait.
+
 ---- RATIONALE ----
 
 >> A5: Why did you choose the data structure(s) that you did for
 >> representing virtual-to-physical mappings?
+
+We used lists because they are more flexible than arrays, while being 
+simple and familiar to use compared to hashing.
 
                PAGING TO AND FROM DISK
                =======================
@@ -81,11 +137,21 @@ A doubly linked list and a "clock hand" pointer was used for the clock
 page replacement algorithm implementation. When we call evict_frame()
 We initialize the clock hand (CH) to be the beginning of the list if the
 CH is null or the end of the list else we move the hand to the next element.
-
+Next we iterate through the frame list and checking if the page directory 
+has been accessed recently. If it has been accessed, set it to false for next
+time else we traverse the list to find a page directory that has not been
+accessed. Once we found one that has not been accessed, we must check if it
+is dirty. If it is dirty we call swap_out to find a index to swap out with
+the user_virt_addr else if it is not dirty we clear the page and inserted
+user_virt_addr.
 
 >> B3: When a process P obtains a frame that was previously used by a
 >> process Q, how do you adjust the page table (and any other data
 >> structures) to reflect the frame Q no longer has?
+
+To reflect that process Q no longer holds a frame that P has now
+obtained, we use pagedir_clear_page on Q to remove it from its
+page directory.
 
 >> B4: Explain your heuristic for deciding whether a page fault for an
 >> invalid virtual address should cause the stack to be extended into
@@ -110,16 +176,27 @@ is over the 8MB stack limit pintos gives us.
 >> the page during the eviction process?  How do you avoid a race
 >> between P evicting Q's frame and Q faulting the page back in?
 
+When a page fault is happening, we keep the page "pinned" to prevent
+other processes from accessing that page.
+
 >> B7: Suppose a page fault in process P causes a page to be read from
 >> the file system or swap.  How do you ensure that a second process Q
 >> cannot interfere by e.g. attempting to evict the frame while it is
 >> still being read in?
+
+While the page is being read from the file system or swap, a lock is 
+acquired by the process, which blocks the other processes from
+interfering with the read operation.
 
 >> B8: Explain how you handle access to paged-out pages that occur
 >> during system calls.  Do you use page faults to bring in pages (as
 >> in user programs), or do you have a mechanism for "locking" frames
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
+
+Page faults are used to bring in pages. To handle attempted access
+to invalid virtual addresses, we validate the address before using it.
+If it is invalid we usually exit.
 
 ---- RATIONALE ----
 
@@ -130,6 +207,10 @@ is over the 8MB stack limit pintos gives us.
 >> where your design falls along this continuum and why you chose to
 >> design it this way.
 
+We use multiple locks within the system. In addition to considerations of
+parallelism, it also made development easier since we would know the purpose
+of each lock when acquiring it.
+
              MEMORY MAPPED FILES
              ===================
 
@@ -139,14 +220,32 @@ is over the 8MB stack limit pintos gives us.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+struct mmap_details {
+  mapid_t id;
+  struct list_elem elem;
+  struct file* file;        // File
+
+  void *addr;               // User virtual address
+  size_t size;              // File size
+};
+
 ---- ALGORITHMS ----
 
 >> C2: Describe how memory mapped files integrate into your virtual
 >> memory subsystem.  Explain how the page fault and eviction
 >> processes differ between swap pages and other pages.
 
+Memory mapped files are kept as a list in each thread in the virtual
+memory subsystem. During an eviction, we check if the pages
+are dirty. If it is not dirty we swap the page.
+
 >> C3: Explain how you determine whether a new file mapping overlaps
 >> any existing segment.
+
+By rounding down the given user virtual address, we used the value
+to lookup the SPT. If the SPT contains the entry, then it will return
+said entry. Should this lookup return NULL, the new file does not 
+overlap an existing segment.
 
 ---- RATIONALE ----
 
@@ -156,6 +255,11 @@ is over the 8MB stack limit pintos gives us.
 >> that much of their implementation can be shared.  Explain why your
 >> implementation either does or does not share much of the code for
 >> the two situations.
+
+Swapping has to use kernel virtual addresses, while mmap does not.
+To avoid confusion, we decided to keep the code between the two 
+situtations independent of each other, such that mmap will access
+kernel virtual addresses
 
                SURVEY QUESTIONS
                ================

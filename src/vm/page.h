@@ -17,6 +17,7 @@
 struct spte
 {
     void *user_virt_addr;
+    void *kpage;
     uint8_t state;
     struct list_elem elem;
 
@@ -28,11 +29,13 @@ struct spte
     int32_t read_bytes;
     int32_t zero_bytes;
     bool writable;
+    bool pinned;
 };
 
 void spt_destroy (struct list *);
 bool spte_set_page (struct list *, void *);
 struct spte *page_lookup(void *);
+struct spte *page_lookup_kpage(void *);
 bool vaddr_is_valid(void *);
 bool load_page (struct list *, uint32_t *, void *);
 

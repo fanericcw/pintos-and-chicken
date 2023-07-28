@@ -69,6 +69,17 @@ struct spte *page_lookup(void *user_virt_addr) {
   return NULL;    // vaddr not found as page
 }
 
+struct spte *page_lookup_kpage(void *kpage) {
+  struct list *spt = &thread_current()->spt;
+  struct list_elem *e;
+  for (e = list_begin(spt); e != list_end(spt); e = list_next(e)) {
+    struct spte *entry = list_entry(e, struct spte, elem);
+    if (entry->kpage == kpage)
+      return entry;
+  }
+  return NULL;    // vaddr not found as page
+}
+
 // Checks whether vaddr is valid
 bool vaddr_is_valid(void * vaddr)
 {
