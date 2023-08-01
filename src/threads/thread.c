@@ -4,7 +4,6 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -667,9 +666,6 @@ init_thread (struct thread *t, const char *name, int priority)
     /* Initialize child process list */
     list_init (&t->child_list);
     t->parent = running_thread ();
-  #endif
-  #ifdef VM
-  list_init(&t->mmap_list);
   #endif
 
   old_level = intr_disable ();

@@ -29,9 +29,6 @@
 #include "userprog/syscall.h"
 #include "userprog/tss.h"
 #else
-#ifdef VM
-#include "vm/frame.h"
-#endif
 #include "tests/threads/tests.h"
 #endif
 #ifdef FILESYS
@@ -117,9 +114,7 @@ main (void)
   exception_init ();
   syscall_init ();
 #endif
-#ifdef VM
-  frame_init ();
-#endif
+
   /* Start thread scheduler and enable interrupts. */
   thread_start ();
   serial_init_queue ();

@@ -6,7 +6,6 @@
 #include "threads/thread.h"
 
 typedef int pid_t;
-typedef int mapid_t;
 
 struct sys_file {
     int fd;
@@ -31,7 +30,5 @@ int write (int fd, const void *buffer, unsigned size);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
-mapid_t mmap (int fd, void *addr);
-void munmap (mapid_t mapping);
 
 #endif /* userprog/syscall.h */

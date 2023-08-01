@@ -18,8 +18,6 @@
 #include "threads/thread.h"
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
-#include "vm/frame.h"
-#include "vm/page.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -141,7 +139,6 @@ process_exit (int status)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-  struct list *spt;
 
   struct list *child_list = &cur->parent->child_list;
   struct child_process *child_process;
@@ -183,12 +180,6 @@ process_exit (int status)
       cur_e = list_next(cur_e);
     }
   }
-
-  #ifdef VM
-  // Destroy the SPTE.
-  spt_destroy(&cur->spt);
-  #endif
-
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -308,7 +299,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
-  list_init(&t->spt);
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
@@ -508,22 +498,22 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       /* Get a page of memory. */
-      uint8_t *kpage = allocate_frame (PAL_USER, upage);
+      uint8_t *kpage = palloc_get_page (PAL_USER);
       if (kpage == NULL)
         return false;
 
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-      {
-        free_frame (kpage);
-        return false; 
-      }
+        {
+          palloc_free_page (kpage);
+          return false; 
+        }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
       /* Add the page to the process's address space. */
       if (!install_page (upage, kpage, writable)) 
         {
-          free_frame (kpage);
+          palloc_free_page (kpage);
           return false; 
         }
 
@@ -543,7 +533,7 @@ setup_stack (void **esp, const char **argv, int argc)
   uint8_t *kpage;
   bool success = false;
 
-  kpage = allocate_frame (PAL_USER | PAL_ZERO, ((uint8_t *) PHYS_BASE) - PGSIZE);
+  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
@@ -593,7 +583,7 @@ setup_stack (void **esp, const char **argv, int argc)
         // hex_dump((uintptr_t)PHYS_BASE - 64, *esp, 64, true);
       }
       else
-        free_frame (kpage);
+        palloc_free_page (kpage);
     }
   return success;
 }
@@ -614,7 +604,6 @@ install_page (void *upage, void *kpage, bool writable)
 
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
-  return pagedir_get_page (t->pagedir, upage) == NULL && 
-        pagedir_set_page (t->pagedir, upage, kpage, writable); // &&
-        spte_set_page (&t->spt, upage);
+  return (pagedir_get_page (t->pagedir, upage) == NULL
+          && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }

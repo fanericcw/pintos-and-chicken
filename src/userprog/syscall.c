@@ -1,6 +1,7 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include "devices/shutdown.h"
+#include "process.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "threads/vaddr.h"
@@ -8,19 +9,11 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "lib/kernel/list.h"
-#include "userprog/process.h"
 #include "pagedir.h"
-#include "threads/malloc.h"
-#include "vm/page.h"
 
 static void syscall_handler (struct intr_frame *);
 static int get_user (const uint8_t *uaddr);
 static bool put_user (uint8_t *udst, uint8_t byte);
-
-#ifdef VM
-mapid_t mmap(int fd, void *addr);
-static struct mmap_details* find_mmap_desc(struct thread *, mapid_t fd);
-#endif
 
  /* An autoincremented unique number for each fd */
 static int fd_num = 1;           
@@ -87,7 +80,7 @@ get_sys_file(int fd)
 
   struct sys_file *temp;
   struct list_elem *e = list_front(&all_files);
-  /* Find corresponding file_elem in list */
+  /* Find corresponding file_elem in list*/
   while (1)
   {
     temp = list_entry(e, struct sys_file, file_elem);
@@ -297,133 +290,6 @@ close (int fd)
   list_remove(&sys_file->file_elem);
 }
 
-// #ifdef VM
-mapid_t mmap(int fd, void *upage) 
-{
-  // Check upage validity
-  if (upage == NULL || pg_ofs(upage) != 0) 
-    return -1;
-  // fd 0 and 1 shouldn't be mapped
-  if (fd <= 1)
-    return -1;
-  struct thread *cur = thread_current();
-
-  /* 1. Open file */
-  struct file *f = NULL;
-  struct sys_file *sys_file = get_sys_file(fd);
-  if (sys_file && sys_file->file) {
-    f = file_reopen (sys_file->file);
-  }
-  if (f == NULL)
-    return -1;
-
-  // Check file size
-  size_t file_size = file_length(f);
-  if (file_size == 0)
-    return -1;
-  uint32_t offset;
-  for (offset = 0; offset < file_size; offset += PGSIZE)
-  {
-    void *addr = upage + offset;
-    if (page_lookup(upage) != NULL)
-      return -1;
-  }
-
-  // Map pages to filesys
-  for (offset = 0; offset < file_size; offset += PGSIZE) 
-  {
-    void *addr = upage + offset;
-
-    size_t read_bytes = (offset + PGSIZE < file_size ? PGSIZE : file_size - offset);
-    size_t zero_bytes = PGSIZE - read_bytes;
-
-    if (!spte_set_page(&cur->spt, addr))
-      return -1;
-    struct spte *spte = page_lookup(addr);
-    spte->user_virt_addr = upage;
-    spte->state = FILE;
-    spte->dirty = false;
-    spte->file = f;
-    spte->file_offset = offset;
-    spte->read_bytes = read_bytes;
-    spte->zero_bytes = zero_bytes;
-    spte->writable = true;
-  }
-
-  mapid_t map_id;
-  if (! list_empty(&cur->mmap_list)) {
-    map_id = list_entry(list_back(&cur->mmap_list), struct mmap_details, elem)->id + 1;
-  }
-  else map_id = 1;
-
-  struct mmap_details *mmap_det = (struct mmap_details*) malloc(sizeof(struct mmap_details));
-  mmap_det->id = map_id;
-  mmap_det->file = f;
-  mmap_det->addr = upage;
-  mmap_det->size = file_size;
-  list_push_back (&cur->mmap_list, &mmap_det->elem);
-
-  return map_id;
-}
-
-static struct mmap_details*
-find_mmap_details(struct thread *t, mapid_t map_id)
-{
-  ASSERT (t != NULL);
-
-  struct list_elem *e;
-
-  if (! list_empty(&t->mmap_list)) {
-    for (e = list_begin(&t->mmap_list);
-        e != list_end(&t->mmap_list); e = list_next(e))
-    {
-      struct mmap_details *det = list_entry(e, struct mmap_details, elem);
-      if(det->id == map_id) {
-        return det;
-      }
-    }
-  }
-
-  return NULL; // not found
-}
-// #endif
-
-void
-munmap (mapid_t mapping)
-{
-  struct thread *cur = thread_current ();
-  struct mmap_details *det = find_mmap_details(cur, mapping);
-  struct list_elem *e;
-  if (mapping <= 0 || det == NULL)
-    return;
-
-  // Unmap each page
-  if (!list_empty(&cur->mmap_list))
-  {
-    for (e = list_begin(&cur->mmap_list);
-        e != list_end(&cur->mmap_list); e = list_next(e))
-    {
-      struct mmap_details *det = list_entry(e, struct mmap_details, elem);
-      size_t offset;
-      for (offset = 0; offset < det->size; offset += PGSIZE) {
-        void *addr = det->addr + offset;
-        struct spte *entry = page_lookup(addr);
-        if (entry != NULL) {
-          if (pagedir_is_dirty(cur->pagedir, addr)) {
-            file_write_at(entry->file, addr, entry->read_bytes, entry->file_offset);
-          }
-          spte_set_page(&cur->spt, addr);
-          pagedir_clear_page(cur->pagedir, addr);
-        }
-      }
-      file_close(det->file);
-      list_remove(&det->elem);
-      free(det);
-    }
-  }
-  free(det);
-}
-
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
@@ -433,10 +299,9 @@ syscall_handler (struct intr_frame *f UNUSED)
   unsigned syscall_number;
   int args[3];
 
-  thread_current()->esp = f->esp;
-
   // Extracting syscall number
   copy_in (&syscall_number, f->esp, sizeof (syscall_number));
+
   switch (syscall_number)
   {
     case SYS_HALT:
@@ -490,18 +355,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
       close((int)args[0]);
       break;
-    #ifdef VM
-    case SYS_MMAP:
-      copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
-      f->eax = mmap((int)args[0], (void*)args[1]);
-      break;
-    case SYS_MUNMAP:
-      copy_in (args, (uint32_t *) f->esp + 1, sizeof (*args));
-      munmap ((mapid_t)args[0]);    
-    #endif
     default:
       exit(-1);
       break;
   }
 }
-
