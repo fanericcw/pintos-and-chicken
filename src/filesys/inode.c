@@ -10,6 +10,24 @@
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
+/* Number of blocks stored in each type of indexed blocks */
+#define DIRECT_SIZE 
+#define INDIRECT_SIZE     /* TODO */
+#define DINDIRECT_SIZE 
+
+/* Number of bytes stored in each type of indexed blocks */
+#define MAX_DIRECT_BYTE 
+#define MAX_INDIRECT_BYTE   /* TODO */
+#define MAX_DINDIRECT_BYTE
+
+static bool inode_create_indirect (block_sector_t *sector, size_t sectors, int level);
+// static bool inode_create_db_indirect (...);
+static bool inode_free_indirect (block_sector_t sector, size_t sectors, int level);
+// static bool inode_free_db_indirect (...);
+// static bool inode_grow (...);
+// static bool inode_grow_indirect (...);
+// static bool inode_grow_db_indirect (...);
+
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
@@ -18,6 +36,9 @@ struct inode_disk
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
     uint32_t unused[125];               /* Not used. */
+
+    // uint32_t direct;
+    // uint32_t indirect;
   };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -342,4 +363,56 @@ off_t
 inode_length (const struct inode *inode)
 {
   return inode->data.length;
+}
+
+bool
+inode_create_indirect (block_sector_t *sector, size_t sectors, int level)
+{
+  static char zeros[BLOCK_SECTOR_SIZE];
+  if (level == 0)
+  {
+    if (free_map_allocate (1, sector))
+    {
+      block_write (fs_device, *sector, zeros);
+      return true;
+    }
+    else
+      return false;
+  }
+  else
+  {
+    block_sector_t new_sector;
+    if (free_map_allocate (1, &new_sector))
+    {
+      block_write (fs_device, new_sector, zeros);
+      if (inode_create_indirect (&new_sector, sectors, level - 1))
+      {
+        block_write (fs_device, *sector, &new_sector);
+        return true;
+      }
+      else
+        return false;
+    }
+    else
+      return false;
+  }
+}
+
+bool
+inode_free_indirect (block_sector_t sector, size_t sectors, int level)
+{
+  if (level == 0)
+  {
+    free_map_release (sector, 1);
+    return true;
+  }
+  block_sector_t new_sector;
+  block_read (fs_device, sector, &new_sector);
+  if (inode_free_indirect (new_sector, sectors, level - 1))
+  {
+    free_map_release (sector, 1);
+    return true;
+  }
+  else
+    return false;
 }
