@@ -8,9 +8,8 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Eric Fan ericcw.fan@mail.utoronto.ca
+Arwin Fong arwin.fong@mail.utoronto.ca
 
 ---- PRELIMINARIES ----
 
@@ -33,10 +32,21 @@ FirstName LastName <email@domain.example>
 >> A2: What is the maximum size of a file supported by your inode
 >> structure?  Show your work.
 
+The max file size our inode structure supports is 8,388,608 bytes.
+
+512 bytes for a Direct Block pointer
+512 * 128 = 65,536 bytes for Indirect Blocks
+512 * 128 * 128 = 8,388,608 bytes for Doubly Indirect blocks
+
 ---- SYNCHRONIZATION ----
 
 >> A3: Explain how your code avoids a race if two processes attempt to
 >> extend a file at the same time.
+
+To avoid race conditions during the case when two processes are 
+attempting to extend a file at the same time, we created a lock that
+each inode holds. Therefore only one process can acquire said lock and
+extend the file at a time.
 
 >> A4: Suppose processes A and B both have file F open, both
 >> positioned at end-of-file.  If A reads and B writes F at the same
@@ -45,12 +55,22 @@ FirstName LastName <email@domain.example>
 >> nonzero data, A is not allowed to see all zeros.  Explain how your
 >> code avoids this race.
 
+Whenever a file F is opened, its inode acquires a lock, which prevents other
+processes from accessing and editing file F. This makes sure the above 
+race does not happen.
+
 >> A5: Explain how your synchronization design provides "fairness".
 >> File access is "fair" if readers cannot indefinitely block writers
 >> or vice versa.  That is, many processes reading from a file cannot
 >> prevent forever another process from writing the file, and many
 >> processes writing to a file cannot prevent another process forever
 >> from reading the file.
+
+Instead of implementing a global filesys_lock that prevents file access
+from writers/reader, we decided to have each inode hold a lock. When a
+a file is being accessed, a buffer and size is to be specified for that
+writer/reader. If each inode has a lock they can read/write to specific
+size without preventing other processes from accessing it.
 
 ---- RATIONALE ----
 
@@ -59,6 +79,8 @@ FirstName LastName <email@domain.example>
 >> indirect blocks?  If not, why did you choose an alternative inode
 >> structure, and what advantages and disadvantages does your
 >> structure have, compared to a multilevel index?
+
+We decided to use multilevel indexing for our inode structure.
 
                 SUBDIRECTORIES
                 ==============
@@ -115,8 +137,14 @@ FirstName LastName <email@domain.example>
 >> buffer cache block, how are other processes prevented from evicting
 >> that block?
 
+A lock is used to prevent other processes from evicting the block that 
+is currently reading/writing to a buffer cache block.
+
 >> C6: During the eviction of a block from the cache, how are other
 >> processes prevented from attempting to access the block?
+
+To prevent other processes from attempting a block that is in the process
+of being evicted, we used a lock to prevent access until it is evicted.
 
 ---- RATIONALE ----
 
